@@ -239,13 +239,26 @@ docker compose up -d --build quotation-maker
 
 ### Step 7 — Install cloudflared as a Windows Service (Auto-start)
 
-Run as **Administrator**:
+Run all commands as **Administrator**:
 
 ```bash
+# 1. Copy config files to LocalSystem profile (required — service runs as LocalSystem, not your user)
+mkdir "C:\Windows\System32\config\systemprofile\.cloudflared"
+copy "C:\Users\<username>\.cloudflared\config.yml" "C:\Windows\System32\config\systemprofile\.cloudflared\config.yml"
+copy "C:\Users\<username>\.cloudflared\<tunnel-id>.json" "C:\Windows\System32\config\systemprofile\.cloudflared\<tunnel-id>.json"
+copy "C:\Users\<username>\.cloudflared\cert.pem" "C:\Windows\System32\config\systemprofile\.cloudflared\cert.pem"
+
+# 2. Install the service
 cloudflared service install
+
+# 3. Point the service explicitly to the config file
+sc config cloudflared binPath= "\"C:\Program Files (x86)\cloudflared\cloudflared.exe\" tunnel --config \"C:\Users\<username>\.cloudflared\config.yml\" run"
+
+# 4. Start the service
+sc start cloudflared
 ```
 
-This registers the tunnel as a Windows service that starts automatically on boot.
+> **Note:** Step 3 is critical. Without it, the service ignores your config and the tunnel won't connect.
 
 ### Step 8 — Auto-start Docker Compose on Boot
 
@@ -288,6 +301,7 @@ After this, the owner just turns on the PC — everything starts automatically w
 | `push --all` fails | Ensure API key has all scopes and Project ID matches `machine-shop-quotation` exactly |
 | Port 80 already in use | Stop any local web server (IIS, XAMPP, nginx) using port 80 before starting Docker |
 | `app.vrivalsarena.com` not loading | Check tunnel status: `sc query cloudflared` — should show `RUNNING` |
+| Tunnel service runs but site still shows Error 1033 | Service is likely using wrong config. Run `sc qc cloudflared` — if `BINARY_PATH_NAME` has no `--config` flag, redo Step 7 from scratch |
 | Appwrite shows "Router protection" error | Ensure `_APP_OPTIONS_ROUTER_PROTECTION=disabled` in `appwrite/.env` and restart containers |
 | Frontend can't reach Appwrite | Verify `NEXT_PUBLIC_APPWRITE_ENDPOINT` points to `https://appwrite.vrivalsarena.com/v1` and rebuild image |
 | Containers don't start on boot | Check `start-kaivalya.bat` is in the Windows startup folder (`shell:startup`) |
