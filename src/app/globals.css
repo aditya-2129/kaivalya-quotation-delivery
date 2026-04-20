@@ -1,0 +1,34 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+  
+  /* Brand Palette from KE_Logo.png */
+  --brand-teal: #5EC0C2;
+  --brand-teal-dark: #5AB7BC;
+  --brand-yellow: #FFFF00;
+  --brand-cyan: #16F8F9;
+  --brand-black: #000000;
+}
+
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #171717;
+  
+  /* Brand Custom Colors directly in theme for reliability */
+  --color-brand-primary: #5EC0C2;
+  --color-brand-secondary: #5AB7BC;
+  --color-brand-accent: #FFFF00;
+  --color-brand-glow: #16F8F9;
+  --color-brand-black: #000000;
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
