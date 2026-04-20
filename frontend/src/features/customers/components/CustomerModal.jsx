@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { THEME } from '@/constants/ui';
 import { X, User, Mail, Phone, MapPin, Briefcase } from 'lucide-react';
 import { useCreateCustomer, useUpdateCustomer } from '../api/useCustomers';
@@ -44,6 +44,12 @@ export const CustomerModal = ({ customer, onClose, onError, onSuccess }) => {
     location: customer?.location || ''
   });
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    const handler = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [onClose]);
 
   const createCustomer = useCreateCustomer();
   const updateCustomer = useUpdateCustomer();

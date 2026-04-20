@@ -25,6 +25,10 @@ export const authService = {
             await account.deleteSession('current');
             return true;
         } catch (error) {
+            // Session already expired or missing — treat as already logged out
+            if (error?.code === 401 || error?.type === 'general_unauthorized_scope') {
+                return true;
+            }
             console.error("Auth Service Error [logout]:", error);
             throw error;
         }

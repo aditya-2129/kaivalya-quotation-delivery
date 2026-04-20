@@ -9,6 +9,7 @@ import { Search, Plus, UserCog, Mail, Phone, Shield, Trash2, Key, Users } from '
 import ConfirmationModal from '@/components/modals/ConfirmationModal';
 import { useUsers, useDeleteUser, useResetPassword } from '@/features/admin/api/useUsers';
 import { UserModal } from '@/features/admin/components/UserModal';
+import { ResetPasswordModal } from '@/features/admin/components/ResetPasswordModal';
 import { toast } from 'react-hot-toast';
 
 export default function UserManagementPage() {
@@ -21,6 +22,7 @@ export default function UserManagementPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, row: null });
+  const [resetTarget, setResetTarget] = useState(null);
 
   useEffect(() => {
     if (!authLoading && !isAdmin) {
@@ -51,17 +53,13 @@ export default function UserManagementPage() {
     }
   };
 
-  const handleResetPassword = async (user) => {
-    const newPass = prompt(`Enter new password for ${user.name}:`);
-    if (!newPass) return;
-    if (newPass.length < 8) {
-      alert('Minimum 8 characters required.');
-      return;
-    }
-    
+  const handleResetPassword = (user) => setResetTarget(user);
+
+  const handleResetConfirm = async (newPassword) => {
     try {
-      await resetPassword.mutateAsync({ authId: user.auth_id, newPassword: newPass });
-      toast.success(`Password for ${user.name} updated.`);
+      await resetPassword.mutateAsync({ authId: resetTarget.auth_id, newPassword });
+      toast.success(`Password for ${resetTarget.name} updated.`);
+      setResetTarget(null);
     } catch (err) {
       toast.error(err.message || 'Password reset failed.');
     }
@@ -175,6 +173,15 @@ export default function UserManagementPage() {
           </table>
         </div>
       </div>
+
+      {resetTarget && (
+        <ResetPasswordModal
+          user={resetTarget}
+          onClose={() => setResetTarget(null)}
+          onConfirm={handleResetConfirm}
+          isSubmitting={resetPassword.isPending}
+        />
+      )}
 
       {isModalOpen && (
         <UserModal 
