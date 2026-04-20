@@ -1,9 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { client } from '@/lib/appwrite';
-import { APPWRITE_CONFIG } from '@/constants/appwrite';
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { THEME } from '@/constants/ui';
 import { Search, Plus, User, MapPin, Mail, Phone, Users, Database } from 'lucide-react';
@@ -17,25 +14,6 @@ export default function CustomersPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [page, setPage] = useState(1);
   const limit = 25;
-  const queryClient = useQueryClient();
-
-  // Realtime subscription
-  useEffect(() => {
-    const channel = `databases.${APPWRITE_CONFIG.DATABASE_ID}.collections.${APPWRITE_CONFIG.COLLECTIONS.CUSTOMERS}.documents`;
-    
-    const unsubscribe = client.subscribe(channel, (response) => {
-      if (response.events.some(event => 
-        event.includes('.create') || 
-        event.includes('.update') || 
-        event.includes('.delete')
-      )) {
-        queryClient.invalidateQueries({ queryKey: ['customers'] });
-      }
-    });
-
-    return () => unsubscribe();
-  }, [queryClient]);
-
   const { data, isLoading, isError } = useCustomers(limit, (page - 1) * limit, searchQuery);
   const deleteCustomer = useDeleteCustomer();
 

@@ -1,9 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { client } from '@/lib/appwrite';
-import { APPWRITE_CONFIG } from '@/constants/appwrite';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { THEME } from '@/constants/ui';
 import { useAuth } from '@/context/AuthContext';
@@ -17,25 +14,6 @@ import { toast } from 'react-hot-toast';
 export default function UserManagementPage() {
   const { isAdmin, isLoading: authLoading } = useAuth();
   const router = useRouter();
-  const queryClient = useQueryClient();
-
-  // Implement Realtime subscription
-  useEffect(() => {
-    const channel = `databases.${APPWRITE_CONFIG.DATABASE_ID}.collections.${APPWRITE_CONFIG.COLLECTIONS.USERS}.documents`;
-    
-    const unsubscribe = client.subscribe(channel, (response) => {
-      if (response.events.some(event => 
-        event.includes('.create') || 
-        event.includes('.update') || 
-        event.includes('.delete')
-      )) {
-        queryClient.invalidateQueries({ queryKey: ['users'] });
-      }
-    });
-
-    return () => unsubscribe();
-  }, [queryClient]);
-
   const { data, isLoading: loading, error: fetchError } = useUsers();
   const deleteUser = useDeleteUser();
   const resetPassword = useResetPassword();

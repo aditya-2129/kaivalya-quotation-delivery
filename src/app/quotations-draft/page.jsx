@@ -1,9 +1,6 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
-import { client } from '@/lib/appwrite';
-import { APPWRITE_CONFIG } from '@/constants/appwrite';
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { THEME } from '@/constants/ui';
 import { toast } from 'react-hot-toast';
@@ -40,28 +37,6 @@ export default function QuotationsPage() {
 
   const { data, isLoading } = useQuotations(limit, (page - 1) * limit, filters);
   const deleteQuotation = useDeleteQuotation();
-  const queryClient = useQueryClient();
-
-  // Implement Realtime Auto-refresh
-  useEffect(() => {
-    const channel = `databases.${APPWRITE_CONFIG.DATABASE_ID}.collections.${APPWRITE_CONFIG.COLLECTIONS.QUOTATIONS}.documents`;
-    
-    const unsubscribe = client.subscribe(channel, (response) => {
-      // If any document is created, updated or deleted, refresh the list
-      if (response.events.some(event => 
-        event.includes('.create') || 
-        event.includes('.update') || 
-        event.includes('.delete')
-      )) {
-        queryClient.invalidateQueries({ queryKey: ['quotations'] });
-      }
-    });
-
-    return () => {
-      unsubscribe();
-    };
-  }, [queryClient]);
-
   const handleSearchChange = (e) => {
     setFilters(prev => ({ ...prev, search: e.target.value }));
     setPage(1);

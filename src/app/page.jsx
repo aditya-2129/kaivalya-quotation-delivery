@@ -1,9 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { client } from "@/lib/appwrite";
-import { APPWRITE_CONFIG } from "@/constants/appwrite";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import { THEME } from "@/constants/ui";
 import { useRouter } from "next/navigation";
@@ -241,30 +238,8 @@ function PipelineBar({ label, count, total, color, textColor }) {
 export default function Home() {
   const router = useRouter();
   const { isAdmin, isLoading: authLoading } = useAuth();
-  const queryClient = useQueryClient();
   const [previewId, setPreviewId] = useState(null);
   const [rejectTarget, setRejectTarget] = useState(null);
-
-  // Realtime auto-refresh
-  useEffect(() => {
-    const collections = [
-      APPWRITE_CONFIG.COLLECTIONS.QUOTATIONS,
-      APPWRITE_CONFIG.COLLECTIONS.CUSTOMERS,
-      APPWRITE_CONFIG.COLLECTIONS.MATERIALS,
-      APPWRITE_CONFIG.COLLECTIONS.PURCHASE_ORDERS,
-    ];
-    const subs = collections.map((collectionId) => {
-      const channel = `databases.${APPWRITE_CONFIG.DATABASE_ID}.collections.${collectionId}.documents`;
-      return client.subscribe(channel, (response) => {
-        if (response.events.some((e) => e.includes(".create") || e.includes(".update") || e.includes(".delete"))) {
-          queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-          queryClient.invalidateQueries({ queryKey: ["recent-quotations"] });
-          queryClient.invalidateQueries({ queryKey: ["review-queue"] });
-        }
-      });
-    });
-    return () => subs.forEach((u) => u());
-  }, [queryClient]);
 
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
   const { data: recent, isLoading: recentLoading } = useRecentQuotations(5);
