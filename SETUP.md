@@ -13,6 +13,16 @@ This guide covers setting up the full system on a fresh Windows PC using Docker 
 
 > After installing Docker Desktop, make sure it is **running** before continuing.
 
+### If the PC has a small C: drive (boot/OS drive only)
+
+Docker stores all its data (images, volumes, database files) on C: by default. If C: has limited space, move Docker's storage to the data drive **before** starting anything:
+
+1. Open Docker Desktop → **Settings** → **Resources** → **Advanced**
+2. Change **Disk image location** from `C:\Users\...\Docker` to your data drive, e.g. `D:\Docker`
+3. Click **Apply & Restart**
+
+Also clone the project repo to the data drive (e.g. `D:\Kaivalya` instead of `C:\...`). The scripts work from any drive — no changes needed.
+
 ---
 
 ## Step 1 — Clone the Repository
@@ -337,6 +347,33 @@ The script will:
 3. Stop Appwrite workers, restore the database and all volumes, then bring everything back up
 
 > **Note:** Restore overwrites all current data. Appwrite will be briefly unavailable during the process (~1–2 minutes).
+
+---
+
+## Disk Space Alert
+
+A daily check runs at **9:00 AM** and shows a Windows notification if the C: drive is running low.
+
+| Free Space | Alert |
+|------------|-------|
+| Below 100 GB | Warning notification |
+| Below 50 GB | Critical notification |
+
+### One-Time Setup (already done on production PC)
+
+Run once as Administrator:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "scripts\register-disk-alert-task.ps1"
+```
+
+### Running Manually
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "scripts\disk-space-alert.ps1"
+```
+
+No output = disk is fine. A notification appears only when space is low.
 
 ---
 

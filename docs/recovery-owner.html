@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kaivalya Engineering - System Recovery Guide (Owner)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, sans-serif; font-size: 13px; color: #1a1a1a; background: #fff; }
+  .page { max-width: 760px; margin: 0 auto; padding: 40px 48px; }
+
+  h1 { font-size: 22px; font-weight: bold; color: #1a1a1a; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: #555; margin-bottom: 32px; border-bottom: 2px solid #1a1a1a; padding-bottom: 12px; }
+
+  h2 { font-size: 15px; font-weight: bold; color: #fff; background: #1a1a1a; padding: 7px 12px; margin: 28px 0 12px 0; }
+  h3 { font-size: 13px; font-weight: bold; color: #1a1a1a; margin: 16px 0 6px 0; }
+
+  p { margin-bottom: 8px; line-height: 1.6; }
+  ul, ol { margin: 6px 0 10px 20px; line-height: 1.8; }
+
+  .box { border: 1px solid #ccc; padding: 12px 16px; margin: 12px 0; background: #f9f9f9; }
+  .box.red { border-color: #c0392b; background: #fdf3f2; }
+  .box.green { border-color: #27ae60; background: #f2fdf5; }
+  .box.yellow { border-color: #e67e22; background: #fefaf3; }
+
+  .box-title { font-weight: bold; margin-bottom: 4px; }
+  .box.red .box-title { color: #c0392b; }
+  .box.green .box-title { color: #27ae60; }
+  .box.yellow .box-title { color: #e67e22; }
+
+  .step { display: flex; gap: 12px; margin: 8px 0; }
+  .step-num { background: #1a1a1a; color: #fff; font-weight: bold; font-size: 12px; min-width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+  .step-body { flex: 1; }
+
+  code { background: #f0f0f0; padding: 1px 5px; border-radius: 3px; font-family: Consolas, monospace; font-size: 12px; }
+  .cmd { background: #1a1a1a; color: #e0e0e0; padding: 10px 14px; margin: 8px 0; border-radius: 4px; font-family: Consolas, monospace; font-size: 12px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12px; }
+  th { background: #1a1a1a; color: #fff; padding: 7px 10px; text-align: left; }
+  td { border: 1px solid #ddd; padding: 7px 10px; vertical-align: top; }
+  tr:nth-child(even) td { background: #f7f7f7; }
+
+  .contact-box { border: 2px solid #1a1a1a; padding: 16px; margin: 16px 0; }
+  .contact-name { font-size: 16px; font-weight: bold; }
+  .contact-detail { font-size: 13px; color: #444; margin-top: 4px; }
+
+  .footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid #ccc; font-size: 11px; color: #888; }
+
+  @media print {
+    body { font-size: 12px; }
+    .page { padding: 20px 24px; }
+    h2 { page-break-after: avoid; }
+    .box, .contact-box { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Kaivalya Engineering</h1>
+  <div class="subtitle">System Recovery Guide &nbsp;&bull;&nbsp; For Owner / Operator &nbsp;&bull;&nbsp; Version 1.0</div>
+
+  <div class="box green">
+    <div class="box-title">Before anything else</div>
+    Check the system status by double-clicking:<br>
+    <code>scripts\health-check.ps1</code> (right-click &rarr; Run with PowerShell)<br><br>
+    It will tell you exactly what is working and what is not.
+  </div>
+
+  <!-- ==================== SECTION 1 ==================== -->
+  <h2>1. App Not Loading (employees can't open the app)</h2>
+
+  <h3>Check 1 &mdash; Is Docker Desktop running?</h3>
+  <p>Look in the taskbar (bottom-right, near the clock) for the Docker whale icon.</p>
+  <ul>
+    <li><strong>If you don't see it:</strong> Open Docker Desktop from the Start menu. Wait 1&ndash;2 minutes for it to fully start.</li>
+    <li><strong>If it shows a red/yellow dot:</strong> Docker is starting up. Wait another minute.</li>
+  </ul>
+
+  <h3>Check 2 &mdash; Start the app containers</h3>
+  <p>Open a folder window and navigate to the project folder (e.g. <code>D:\Kaivalya</code> or <code>C:\Kaivalya</code>). Right-click in the folder and open PowerShell or Terminal, then run:</p>
+  <div class="cmd">docker compose up -d</div>
+  <p>Wait 30 seconds, then try opening the app again.</p>
+
+  <h3>Check 3 &mdash; Restart the PC</h3>
+  <p>If Docker is running but the app still doesn't load, restart the PC. Docker and all services start automatically on login (within 1&ndash;2 minutes).</p>
+
+  <h3>Check 4 &mdash; Internet access is down but local access works</h3>
+  <p>Employees in the office can always access the app at <code>http://localhost:3000</code>. Internet access (via <code>app.vrivalsarena.com</code>) goes through the Cloudflare tunnel. If the tunnel is down, local access still works.</p>
+  <p>To restart the tunnel, open Command Prompt <strong>as Administrator</strong> and run:</p>
+  <div class="cmd">sc start cloudflared</div>
+
+  <div class="box yellow">
+    <div class="box-title">Still not working after all of the above?</div>
+    Call your developer (contact details at the end of this document).
+  </div>
+
+  <!-- ==================== SECTION 2 ==================== -->
+  <h2>2. Something Looks Wrong in the Data</h2>
+
+  <div class="box red">
+    <div class="box-title">Important: Do NOT delete anything yourself</div>
+    If quotations, customers, or files appear missing or incorrect, do not attempt to fix the database manually. Call your developer first.
+  </div>
+
+  <h3>What you can safely do</h3>
+  <ul>
+    <li>Take a screenshot of what looks wrong.</li>
+    <li>Note the time it was noticed and what was last done before that.</li>
+    <li>Run the health check script to confirm the system is up.</li>
+    <li>Call your developer with these details.</li>
+  </ul>
+
+  <h3>If you need to restore from a backup</h3>
+  <p>This is done by your developer, or you can follow these steps with their guidance on the phone:</p>
+
+  <div class="step">
+    <div class="step-num">1</div>
+    <div class="step-body">Navigate to the project folder. Right-click &rarr; Open in PowerShell.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">2</div>
+    <div class="step-body">Run the restore script:
+      <div class="cmd">powershell -ExecutionPolicy Bypass -File "backup\restore-appwrite.ps1"</div>
+    </div>
+  </div>
+  <div class="step">
+    <div class="step-num">3</div>
+    <div class="step-body">A list of available backups will appear, numbered 0, 1, 2. Press Enter to use the most recent backup (recommended), or type a number to choose an older one.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">4</div>
+    <div class="step-body">Type <code>YES</code> (all capitals) and press Enter to confirm.</div>
+  </div>
+  <div class="step">
+    <div class="step-num">5</div>
+    <div class="step-body">The script will stop the app, restore all data, and start everything again. This takes about 1&ndash;2 minutes. The app will be unavailable during this time.</div>
+  </div>
+
+  <div class="box yellow">
+    <div class="box-title">Restore warning</div>
+    Restoring from backup replaces ALL current data with the backup copy. Any work done after the backup was taken will be lost. The backup runs daily at 1:00 PM.
+  </div>
+
+  <!-- ==================== SECTION 3 ==================== -->
+  <h2>3. Low Disk Space Warning</h2>
+
+  <p>A daily check runs at 9:00 AM. If the C: drive is running low, a notification will appear on the desktop.</p>
+
+  <table>
+    <tr><th>Notification</th><th>What it means</th><th>What to do</th></tr>
+    <tr><td>Disk Space Warning</td><td>Below 100 GB free</td><td>Delete old files, empty Recycle Bin, or contact developer</td></tr>
+    <tr><td>CRITICAL: Disk Almost Full</td><td>Below 50 GB free</td><td>Act immediately &mdash; the app may stop working</td></tr>
+  </table>
+
+  <h3>Quick ways to free space</h3>
+  <ul>
+    <li>Empty the Recycle Bin.</li>
+    <li>Delete files in Downloads folder you no longer need.</li>
+    <li>Run Windows Disk Cleanup (search "Disk Cleanup" in Start menu).</li>
+    <li>Call your developer if unsure &mdash; do not delete Docker files or the project folder.</li>
+  </ul>
+
+  <!-- ==================== SECTION 4 ==================== -->
+  <h2>4. Daily Backup</h2>
+
+  <p>The backup runs automatically every day at <strong>1:00 PM</strong> (during lunch break). It saves a copy of all quotations, customers, purchase orders, uploaded files, and settings.</p>
+
+  <table>
+    <tr><th>What is backed up</th><th>Where</th></tr>
+    <tr><td>All database data (quotations, customers, users, POs)</td><td>Project folder &rarr; <code>backup\snapshots\</code></td></tr>
+    <tr><td>All uploaded files (drawings, PDFs, CAD files)</td><td>Same location</td></tr>
+    <tr><td>App configuration and certificates</td><td>Same location</td></tr>
+  </table>
+
+  <p>The last 3 daily backups are kept. If the PC is off at 1:00 PM, the backup runs automatically when the PC is next turned on.</p>
+
+  <h3>Running a manual backup</h3>
+  <p>If you want to take a backup right now (e.g. before a restore, or before a major data entry session):</p>
+  <div class="cmd">powershell -ExecutionPolicy Bypass -File "backup\backup-appwrite.ps1"</div>
+
+  <!-- ==================== SECTION 5 ==================== -->
+  <h2>5. PC Must Be On for the App to Work</h2>
+
+  <div class="box yellow">
+    <div class="box-title">This is a self-hosted system</div>
+    The app runs on this PC. If the PC is turned off, nobody can access it &mdash; not in the office, and not remotely. Make sure the PC is on during working hours.
+  </div>
+
+  <p>The PC does not need to be logged in for the app to work &mdash; just turned on. Docker and the app start automatically in the background when Windows starts.</p>
+
+  <h3>Before shutting down or restarting</h3>
+  <ul>
+    <li>Let employees know the app will be unavailable for a few minutes.</li>
+    <li>After restarting, wait 2 minutes before telling employees it is ready.</li>
+  </ul>
+
+  <!-- ==================== SECTION 6 ==================== -->
+  <h2>6. Quick Reference &mdash; Common Problems</h2>
+
+  <table>
+    <tr><th>Problem</th><th>Most likely cause</th><th>First thing to try</th></tr>
+    <tr><td>App not loading from internet</td><td>Cloudflare tunnel stopped</td><td>Run <code>sc start cloudflared</code> as Administrator</td></tr>
+    <tr><td>App not loading locally either</td><td>Docker or containers stopped</td><td>Open Docker Desktop, then run <code>docker compose up -d</code></td></tr>
+    <tr><td>Login page shows, but login fails</td><td>App is running fine &mdash; check credentials</td><td>Verify email/password; call developer if correct credentials fail</td></tr>
+    <tr><td>Uploaded file won't open</td><td>File may be corrupted or storage issue</td><td>Try re-uploading; call developer if it persists</td></tr>
+    <tr><td>Backup notification on screen</td><td>C: drive running low</td><td>Free up disk space (see Section 3)</td></tr>
+    <tr><td>PC was off, now something looks wrong</td><td>Data was changed before backup</td><td>Run health check, call developer</td></tr>
+  </table>
+
+  <!-- ==================== SECTION 7 ==================== -->
+  <h2>7. Contact &mdash; Developer Support</h2>
+
+  <div class="contact-box">
+    <div class="contact-name">Developer Name</div>
+    <div class="contact-detail">Phone: ___________________________</div>
+    <div class="contact-detail">Email: ___________________________</div>
+    <div class="contact-detail">WhatsApp: ___________________________</div>
+    <div class="contact-detail" style="margin-top: 8px; font-size: 12px; color: #888;">Fill in contact details before handing this document to the client.</div>
+  </div>
+
+  <h3>When you call, have ready:</h3>
+  <ul>
+    <li>What the problem is (screenshot if possible)</li>
+    <li>When it started</li>
+    <li>What was last done before the problem appeared</li>
+    <li>Output of the health check script (take a photo of the screen)</li>
+  </ul>
+
+  <div class="footer">
+    Kaivalya Engineering &bull; System Recovery Guide (Owner) &bull; Version 1.0 &bull; Print date: <span id="d"></span>
+    <script>document.getElementById('d').textContent = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'long',year:'numeric'});</script>
+  </div>
+
+</div>
+</body>
+</html>

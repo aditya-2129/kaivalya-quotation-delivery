@@ -2,23 +2,30 @@
 # Usage: run this script and pick a backup when prompted
 # WARNING: This OVERWRITES current data.
 
+# Resolve paths relative to this script's location so it works on any machine
+$ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ProjectDir = Split-Path -Parent $ScriptDir
+
+# Read credentials from appwrite/.env so this works on any machine
+$EnvFile      = Join-Path $ProjectDir "appwrite\.env"
+$DB_ROOT_PASS = (Get-Content $EnvFile | Select-String "^_APP_DB_ROOT_PASS=").ToString().Split("=",2)[1].Trim('"')
+$DB_NAME      = (Get-Content $EnvFile | Select-String "^_APP_DB_SCHEMA=").ToString().Split("=",2)[1].Trim('"')
 $DB_CONTAINER = "appwrite-mariadb"
-$DB_NAME      = "appwrite"
-$DB_ROOT_PASS = "rootsecretpassword"
+
+# Derive Docker Compose project name from folder name (lowercase)
+$ProjectName = (Split-Path -Leaf $ProjectDir).ToLower()
 
 $Volumes = @{
-    "uploads.tar"      = "kaivalya_appwrite-uploads"
-    "config.tar"       = "kaivalya_appwrite-config"
-    "certificates.tar" = "kaivalya_appwrite-certificates"
-    "imports.tar"      = "kaivalya_appwrite-imports"
+    "uploads.tar"      = "${ProjectName}_appwrite-uploads"
+    "config.tar"       = "${ProjectName}_appwrite-config"
+    "certificates.tar" = "${ProjectName}_appwrite-certificates"
+    "imports.tar"      = "${ProjectName}_appwrite-imports"
 }
 
 function Log($msg) {
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $msg"
 }
 
-# Resolve paths relative to this script's location so it works on any machine
-$ScriptDir    = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SnapshotsDir = Join-Path $ScriptDir "snapshots"
 
 # --- Pick backup ---

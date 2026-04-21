@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Kaivalya Engineering - Developer Recovery Reference</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Consolas, 'Courier New', monospace; font-size: 12px; color: #1a1a1a; background: #fff; }
+  .page { max-width: 800px; margin: 0 auto; padding: 40px 48px; }
+
+  h1 { font-size: 20px; font-weight: bold; font-family: Arial, sans-serif; color: #1a1a1a; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: #555; font-family: Arial, sans-serif; margin-bottom: 28px; border-bottom: 2px solid #1a1a1a; padding-bottom: 10px; }
+
+  h2 { font-size: 13px; font-weight: bold; font-family: Arial, sans-serif; color: #fff; background: #1a1a1a; padding: 6px 10px; margin: 26px 0 10px 0; letter-spacing: 0.5px; text-transform: uppercase; }
+  h3 { font-size: 12px; font-weight: bold; font-family: Arial, sans-serif; color: #1a1a1a; margin: 14px 0 5px 0; border-left: 3px solid #1a1a1a; padding-left: 8px; }
+
+  p { margin-bottom: 7px; line-height: 1.6; font-family: Arial, sans-serif; font-size: 12px; }
+  ul, ol { margin: 5px 0 9px 18px; font-family: Arial, sans-serif; font-size: 12px; line-height: 1.8; }
+
+  code { background: #f0f0f0; padding: 1px 4px; border-radius: 2px; font-family: Consolas, monospace; font-size: 11px; }
+  .cmd { background: #111; color: #d4d4d4; padding: 9px 13px; margin: 7px 0; border-radius: 3px; font-family: Consolas, monospace; font-size: 11px; white-space: pre; }
+  .cmd .comment { color: #6a9955; }
+  .cmd .kw { color: #569cd6; }
+
+  .box { border: 1px solid #ccc; padding: 10px 14px; margin: 10px 0; background: #f9f9f9; font-family: Arial, sans-serif; font-size: 12px; }
+  .box.red { border-color: #c0392b; background: #fdf3f2; }
+  .box.yellow { border-color: #e67e22; background: #fefaf3; }
+  .box-title { font-weight: bold; margin-bottom: 4px; font-family: Arial, sans-serif; }
+  .box.red .box-title { color: #c0392b; }
+  .box.yellow .box-title { color: #e67e22; }
+
+  table { width: 100%; border-collapse: collapse; margin: 9px 0; font-family: Arial, sans-serif; font-size: 11px; }
+  th { background: #333; color: #fff; padding: 6px 9px; text-align: left; }
+  td { border: 1px solid #ddd; padding: 6px 9px; vertical-align: top; }
+  tr:nth-child(even) td { background: #f7f7f7; }
+  td code { font-size: 10.5px; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 10px 0; }
+
+  .footer { margin-top: 40px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 10px; color: #888; font-family: Arial, sans-serif; }
+
+  @media print {
+    body { font-size: 11px; }
+    .page { padding: 18px 22px; }
+    h2 { page-break-after: avoid; }
+    .box, table { page-break-inside: avoid; }
+    .cmd { font-size: 10px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Kaivalya Engineering &mdash; Developer Recovery Reference</h1>
+  <div class="subtitle">Internal technical document &bull; Not for client distribution &bull; Version 1.0</div>
+
+  <!-- ==================== ARCHITECTURE ==================== -->
+  <h2>System Architecture</h2>
+
+  <div class="two-col">
+    <div>
+      <h3>Stack</h3>
+      <table>
+        <tr><th>Layer</th><th>Technology</th></tr>
+        <tr><td>Frontend</td><td>Next.js (Docker container)</td></tr>
+        <tr><td>Backend / Auth / DB</td><td>Appwrite v1.9 (self-hosted)</td></tr>
+        <tr><td>Database engine</td><td>MariaDB (inside Appwrite stack)</td></tr>
+        <tr><td>Cache</td><td>Redis (inside Appwrite stack)</td></tr>
+        <tr><td>Reverse proxy</td><td>Traefik (inside Appwrite stack)</td></tr>
+        <tr><td>Internet exposure</td><td>Cloudflare Tunnel (cloudflared Windows service)</td></tr>
+        <tr><td>OS</td><td>Windows 11</td></tr>
+        <tr><td>Container runtime</td><td>Docker Desktop</td></tr>
+      </table>
+    </div>
+    <div>
+      <h3>URLs</h3>
+      <table>
+        <tr><th>URL</th><th>Purpose</th></tr>
+        <tr><td><code>http://localhost:3000</code></td><td>Frontend (local)</td></tr>
+        <tr><td><code>http://localhost/v1</code></td><td>Appwrite API (local)</td></tr>
+        <tr><td><code>http://localhost</code></td><td>Appwrite console (local)</td></tr>
+        <tr><td><code>https://app.vrivalsarena.com</code></td><td>Frontend (internet)</td></tr>
+        <tr><td><code>https://appwrite.vrivalsarena.com</code></td><td>Appwrite (internet)</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <h3>Project folder structure</h3>
+  <div class="cmd">Kaivalya\
+  appwrite\
+    docker-compose.yml       <span class="comment"># Appwrite stack definition</span>
+    .env                     <span class="comment"># All Appwrite credentials and config</span>
+  frontend\
+    src\                     <span class="comment"># Next.js source</span>
+    appwrite.config.json     <span class="comment"># DB schema / bucket definitions</span>
+    .env                     <span class="comment"># NEXT_PUBLIC_* vars + APPWRITE_API_KEY</span>
+    Dockerfile
+  backup\
+    backup-appwrite.ps1      <span class="comment"># Daily backup script (Task Scheduler)</span>
+    restore-appwrite.ps1     <span class="comment"># Interactive restore</span>
+    register-backup-task.ps1 <span class="comment"># One-time: register Task Scheduler job</span>
+    snapshots\               <span class="comment"># Timestamped backup folders (gitignored)</span>
+  scripts\
+    health-check.ps1         <span class="comment"># Owner status checker</span>
+    disk-space-alert.ps1     <span class="comment"># Daily disk check (Task Scheduler)</span>
+    register-disk-alert-task.ps1
+  docker-compose.yml         <span class="comment"># Root compose: includes appwrite + frontend</span>
+  SETUP.md</div>
+
+  <!-- ==================== CONTAINERS ==================== -->
+  <h2>Containers &amp; Volumes</h2>
+
+  <h3>Critical containers (app is down if any of these are missing)</h3>
+  <table>
+    <tr><th>Container</th><th>Role</th></tr>
+    <tr><td><code>appwrite</code></td><td>Main Appwrite API server</td></tr>
+    <tr><td><code>appwrite-mariadb</code></td><td>Database engine</td></tr>
+    <tr><td><code>appwrite-redis</code></td><td>Cache / queue</td></tr>
+    <tr><td><code>appwrite-traefik</code></td><td>Reverse proxy, routes port 80 to Appwrite</td></tr>
+    <tr><td><code>appwrite-realtime</code></td><td>WebSocket server</td></tr>
+    <tr><td><code>quotation-maker</code></td><td>Next.js frontend on port 3000</td></tr>
+  </table>
+
+  <h3>Named volumes (all data lives here)</h3>
+  <table>
+    <tr><th>Volume</th><th>Contents</th></tr>
+    <tr><td><code>{project}_appwrite-mariadb</code></td><td>Full MariaDB data directory</td></tr>
+    <tr><td><code>{project}_appwrite-uploads</code></td><td>Storage bucket files (drawings, PDFs, CAD)</td></tr>
+    <tr><td><code>{project}_appwrite-config</code></td><td>Appwrite internal config</td></tr>
+    <tr><td><code>{project}_appwrite-certificates</code></td><td>SSL certs managed by Appwrite</td></tr>
+    <tr><td><code>{project}_appwrite-imports</code></td><td>Migration/import data</td></tr>
+  </table>
+  <p><code>{project}</code> = lowercase name of the project root folder (e.g. <code>kaivalya</code>).</p>
+
+  <!-- ==================== CREDENTIALS ==================== -->
+  <h2>Credentials Location</h2>
+
+  <div class="box red">
+    <div class="box-title">Never hardcode credentials in scripts</div>
+    All scripts read credentials at runtime from <code>appwrite\.env</code>. This file is gitignored. Back it up separately.
+  </div>
+
+  <table>
+    <tr><th>Credential</th><th>File</th><th>Key</th></tr>
+    <tr><td>MariaDB root password</td><td><code>appwrite\.env</code></td><td><code>_APP_DB_ROOT_PASS</code></td></tr>
+    <tr><td>MariaDB DB name</td><td><code>appwrite\.env</code></td><td><code>_APP_DB_SCHEMA</code></td></tr>
+    <tr><td>MariaDB app user/pass</td><td><code>appwrite\.env</code></td><td><code>_APP_DB_USER</code> / <code>_APP_DB_PASS</code></td></tr>
+    <tr><td>Appwrite API key</td><td><code>frontend\.env</code></td><td><code>APPWRITE_API_KEY</code></td></tr>
+    <tr><td>Appwrite project ID</td><td><code>frontend\.env</code></td><td><code>NEXT_PUBLIC_APPWRITE_PROJECT_ID</code></td></tr>
+    <tr><td>Appwrite OpenSSL key</td><td><code>appwrite\.env</code></td><td><code>_APP_OPENSSL_KEY_V1</code></td></tr>
+  </table>
+
+  <p>Appwrite console login: created during initial setup at <code>http://localhost</code> &mdash; stored only in Appwrite's own DB. Reset via Appwrite console if forgotten.</p>
+
+  <!-- ==================== BACKUP / RESTORE ==================== -->
+  <h2>Backup &amp; Restore</h2>
+
+  <h3>Backup contents (per snapshot folder)</h3>
+  <table>
+    <tr><th>File</th><th>What it contains</th></tr>
+    <tr><td><code>appwrite-db.sql</code></td><td>Full mysqldump of the <code>appwrite</code> schema: all collections, documents, users, teams, sessions</td></tr>
+    <tr><td><code>uploads.tar</code></td><td>All storage bucket files</td></tr>
+    <tr><td><code>config.tar</code></td><td>Appwrite config volume</td></tr>
+    <tr><td><code>certificates.tar</code></td><td>SSL certificate volume</td></tr>
+    <tr><td><code>imports.tar</code></td><td>Import volume</td></tr>
+  </table>
+
+  <h3>Manual backup</h3>
+  <div class="cmd">powershell -ExecutionPolicy Bypass -File "backup\backup-appwrite.ps1"</div>
+
+  <h3>Restore procedure</h3>
+  <div class="cmd">powershell -ExecutionPolicy Bypass -File "backup\restore-appwrite.ps1"</div>
+  <p>Prompts for backup selection and YES confirmation. Stops Appwrite workers, drops and recreates DB, restores volumes, brings everything back up. Takes ~1&ndash;2 min.</p>
+
+  <h3>Manual restore (without the script)</h3>
+  <div class="cmd"><span class="comment"># 1. Stop Appwrite workers (keep mariadb running)</span>
+docker compose stop appwrite appwrite-worker-audits appwrite-worker-webhooks \
+  appwrite-worker-deletes appwrite-worker-databases appwrite-worker-builds \
+  appwrite-worker-functions appwrite-worker-mails appwrite-realtime
+
+<span class="comment"># 2. Drop and recreate DB</span>
+docker exec -i appwrite-mariadb mysql -uroot -p"&lt;ROOT_PASS&gt;" -e \
+  "DROP DATABASE IF EXISTS appwrite; CREATE DATABASE appwrite CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+<span class="comment"># 3. Restore SQL</span>
+Get-Content "backup\snapshots\&lt;TIMESTAMP&gt;\appwrite-db.sql" | \
+  docker exec -i appwrite-mariadb mysql -uroot -p"&lt;ROOT_PASS&gt;" appwrite
+
+<span class="comment"># 4. Restore a volume (repeat for each)</span>
+docker run --rm \
+  -v "kaivalya_appwrite-uploads:/data" \
+  -v "C:\path\to\backup\snapshots\&lt;TIMESTAMP&gt;:/backup:ro" \
+  alpine sh -c "rm -rf /data/* /data/.[!.]* 2>/dev/null; tar -xf /backup/uploads.tar -C /data"
+
+<span class="comment"># 5. Start everything</span>
+docker compose up -d</div>
+
+  <!-- ==================== FRESH MACHINE SETUP ==================== -->
+  <h2>Setting Up on a Fresh Machine</h2>
+
+  <ol>
+    <li>Install Docker Desktop. In Settings &rarr; Resources &rarr; Advanced, move disk image to data drive if C: is small.</li>
+    <li>Install Git.</li>
+    <li>Clone repo to data drive: <code>git clone &lt;repo-url&gt; D:\Kaivalya</code></li>
+    <li>Copy <code>appwrite\.env</code> and <code>frontend\.env</code> from backup (these are gitignored).</li>
+    <li>From project root: <code>docker compose up -d</code></li>
+    <li>Wait ~5 min for images to pull and containers to start.</li>
+    <li>Restore latest backup: <code>powershell -ExecutionPolicy Bypass -File "backup\restore-appwrite.ps1"</code></li>
+    <li>Register scheduled tasks (run as Administrator):
+      <div class="cmd">powershell -ExecutionPolicy Bypass -File "backup\register-backup-task.ps1"
+powershell -ExecutionPolicy Bypass -File "scripts\register-disk-alert-task.ps1"</div>
+    </li>
+    <li>Set up Cloudflare Tunnel (see SETUP.md &rarr; Production Setup section).</li>
+    <li>Update <code>start-kaivalya.bat</code> in Windows startup folder with new drive letter.</li>
+  </ol>
+
+  <div class="box yellow">
+    <div class="box-title">The two .env files are NOT in git</div>
+    <code>appwrite\.env</code> and <code>frontend\.env</code> must be copied manually from a secure backup.
+    Without <code>appwrite\.env</code>, the backup/restore scripts will fail.
+    Without <code>frontend\.env</code>, the frontend container will fail to start.
+  </div>
+
+  <!-- ==================== SCHEDULED TASKS ==================== -->
+  <h2>Windows Scheduled Tasks</h2>
+
+  <table>
+    <tr><th>Task name</th><th>Script</th><th>Schedule</th><th>Requires admin to register</th></tr>
+    <tr><td><code>\Kaivalya\Appwrite Daily Backup</code></td><td><code>backup\backup-appwrite.ps1</code></td><td>Daily 1:00 PM, StartWhenAvailable</td><td>Yes</td></tr>
+    <tr><td><code>\Kaivalya\Disk Space Alert</code></td><td><code>scripts\disk-space-alert.ps1</code></td><td>Daily 9:00 AM, StartWhenAvailable</td><td>Yes</td></tr>
+  </table>
+
+  <p>Verify tasks are registered: open Task Scheduler &rarr; Task Scheduler Library &rarr; Kaivalya folder.</p>
+  <p>To force-run a task now (for testing): right-click the task &rarr; Run.</p>
+
+  <!-- ==================== APPWRITE ADMIN ==================== -->
+  <h2>Appwrite Administration</h2>
+
+  <h3>Console access</h3>
+  <p>Local: <code>http://localhost</code> &nbsp;&bull;&nbsp; Remote: <code>https://appwrite.vrivalsarena.com/console</code></p>
+
+  <h3>Appwrite project details</h3>
+  <table>
+    <tr><th>Setting</th><th>Value</th></tr>
+    <tr><td>Project ID</td><td><code>machine-shop-quotation</code></td></tr>
+    <tr><td>Database ID</td><td><code>machine-shop-database</code></td></tr>
+    <tr><td>Storage bucket ID</td><td><code>inquiry_files</code></td></tr>
+    <tr><td>Max file upload size</td><td>100 MB (<code>_APP_STORAGE_LIMIT=100000000</code>)</td></tr>
+  </table>
+
+  <h3>Collections</h3>
+  <p><code>quotation_history</code>, <code>labor_rates</code>, <code>bop_library</code>, <code>customers</code>, <code>materials_library</code>, <code>users</code>, <code>purchase_orders</code></p>
+
+  <h3>Pushing schema changes</h3>
+  <div class="cmd"><span class="comment"># Requires Node.js (dev machine only)</span>
+cd frontend
+npx appwrite-cli login --endpoint http://localhost/v1
+npx appwrite-cli push --all</div>
+
+  <h3>Checking Appwrite logs</h3>
+  <div class="cmd">docker logs appwrite --tail 100 -f
+docker logs appwrite-mariadb --tail 50
+docker logs quotation-maker --tail 100 -f</div>
+
+  <!-- ==================== CLOUDFLARE TUNNEL ==================== -->
+  <h2>Cloudflare Tunnel</h2>
+
+  <table>
+    <tr><th>Action</th><th>Command (run as Administrator)</th></tr>
+    <tr><td>Check status</td><td><code>sc query cloudflared</code></td></tr>
+    <tr><td>Start tunnel</td><td><code>sc start cloudflared</code></td></tr>
+    <tr><td>Stop tunnel</td><td><code>sc stop cloudflared</code></td></tr>
+    <tr><td>Check config path</td><td><code>sc qc cloudflared</code> (look for <code>--config</code> flag in BINARY_PATH_NAME)</td></tr>
+  </table>
+
+  <p>Tunnel config: <code>C:\Users\&lt;username&gt;\.cloudflared\config.yml</code></p>
+  <p>Service config copy: <code>C:\Windows\System32\config\systemprofile\.cloudflared\config.yml</code></p>
+
+  <div class="box yellow">
+    <div class="box-title">Common tunnel issue: Error 1033</div>
+    Service is running but ignores config. Fix: check <code>sc qc cloudflared</code> &mdash; if BINARY_PATH_NAME has no <code>--config</code> flag, re-run:
+    <div class="cmd">sc config cloudflared binPath= "\"C:\Program Files (x86)\cloudflared\cloudflared.exe\" tunnel --config \"C:\Users\&lt;username&gt;\.cloudflared\config.yml\" run"</div>
+  </div>
+
+  <!-- ==================== COMMON ISSUES ==================== -->
+  <h2>Troubleshooting Quick Reference</h2>
+
+  <table>
+    <tr><th>Symptom</th><th>Diagnosis</th><th>Fix</th></tr>
+    <tr><td>All containers down after reboot</td><td>Docker didn't auto-start</td><td>Check <code>start-kaivalya.bat</code> in startup folder; Docker Desktop must be set to start on login</td></tr>
+    <tr><td>DB restore fails mid-way</td><td>mariadb container not running, or wrong password</td><td>Check <code>_APP_DB_ROOT_PASS</code> in <code>appwrite\.env</code>; ensure mariadb container is up</td></tr>
+    <tr><td>Volume restore produces empty data</td><td>Wrong volume name (project prefix mismatch)</td><td>Run <code>docker volume ls</code> to confirm actual volume names; update script if folder was renamed</td></tr>
+    <tr><td>Frontend can't reach Appwrite</td><td><code>NEXT_PUBLIC_APPWRITE_ENDPOINT</code> wrong</td><td>Check <code>frontend\.env</code>; rebuild: <code>docker compose up -d --build quotation-maker</code></td></tr>
+    <tr><td>Appwrite shows router protection error</td><td><code>_APP_OPTIONS_ROUTER_PROTECTION</code> enabled</td><td>Set to <code>disabled</code> in <code>appwrite\.env</code>; restart: <code>docker compose restart appwrite</code></td></tr>
+    <tr><td>API key stopped working silently</td><td>Key expired or was deleted</td><td>Check expiry in Appwrite console &rarr; Settings &rarr; API Keys; regenerate and update <code>frontend\.env</code></td></tr>
+    <tr><td>File upload rejected over 30 MB</td><td>Old storage limit</td><td>Confirm <code>_APP_STORAGE_LIMIT=100000000</code> in <code>appwrite\.env</code>; restart appwrite container</td></tr>
+    <tr><td>Backup log shows ERROR</td><td>mysqldump failed or volume tar failed</td><td>Check Docker is running and mariadb container is up; run backup manually to see live output</td></tr>
+    <tr><td>Task Scheduler not running backup</td><td>Task not registered, or PC user changed</td><td>Re-run <code>register-backup-task.ps1</code> as Administrator; verify task in Task Scheduler</td></tr>
+    <tr><td>Port 80 conflict</td><td>IIS or another web server on port 80</td><td>Stop IIS: <code>net stop w3svc</code>; or disable in Windows Features</td></tr>
+  </table>
+
+  <!-- ==================== DOCKER COMMANDS ==================== -->
+  <h2>Useful Docker Commands</h2>
+
+  <div class="cmd"><span class="comment"># Status</span>
+docker compose ps
+docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+<span class="comment"># Start / stop</span>
+docker compose up -d
+docker compose down
+docker compose restart appwrite
+docker compose restart quotation-maker
+
+<span class="comment"># Logs</span>
+docker logs appwrite --tail 100
+docker logs quotation-maker --tail 100 -f
+
+<span class="comment"># Volume inspection</span>
+docker volume ls
+docker volume inspect kaivalya_appwrite-uploads
+
+<span class="comment"># Shell into a container</span>
+docker exec -it appwrite sh
+docker exec -it appwrite-mariadb bash
+
+<span class="comment"># DB access</span>
+docker exec -it appwrite-mariadb mysql -uroot -p"&lt;ROOT_PASS&gt;" appwrite
+
+<span class="comment"># Disk usage</span>
+docker system df</div>
+
+  <div class="footer">
+    Kaivalya Engineering &bull; Developer Recovery Reference &bull; Version 1.0 &bull; Internal document &bull; Print date: <span id="d"></span>
+    <script>document.getElementById('d').textContent = new Date().toLocaleDateString('en-IN', {day:'2-digit',month:'long',year:'numeric'});</script>
+  </div>
+
+</div>
+</body>
+</html>
