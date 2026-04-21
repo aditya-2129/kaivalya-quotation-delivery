@@ -1,1 +1,3 @@
 appwrite/.env
+frontend/.env
+backup/snapshots/

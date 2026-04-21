@@ -290,6 +290,56 @@ After this, the owner just turns on the PC — everything starts automatically w
 
 ---
 
+## Backup & Restore
+
+Automated daily backups are configured for the Appwrite database and storage volumes.
+
+### What Gets Backed Up
+
+| Item | Contents |
+|------|----------|
+| `appwrite-db.sql` | Full MariaDB dump — all collections, documents, users, teams |
+| `uploads.tar` | All storage bucket files |
+| `config.tar` | Appwrite configuration |
+| `certificates.tar` | SSL certificates |
+| `imports.tar` | Import data |
+
+Backups are saved as timestamped zips in `backup/snapshots/`. The last 7 daily backups are kept automatically.
+
+### Schedule
+
+The backup runs daily at **2:00 AM** via Windows Task Scheduler (`\Kaivalya\Appwrite Daily Backup`).
+If the PC is off at that time, the backup runs automatically the next time the PC boots.
+
+### One-Time Setup (already done on production PC)
+
+Run once as Administrator to register the scheduled task:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "backup\register-backup-task.ps1"
+```
+
+### Running a Manual Backup
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "backup\backup-appwrite.ps1"
+```
+
+### Restoring from a Backup
+
+```powershell
+powershell -ExecutionPolicy Bypass -File "backup\restore-appwrite.ps1"
+```
+
+The script will:
+1. Show a numbered list of available backup zips — pick one (default is most recent)
+2. Type `YES` to confirm
+3. Stop Appwrite workers, restore the database and all volumes, then bring everything back up
+
+> **Note:** Restore overwrites all current data. Appwrite will be briefly unavailable during the process (~1–2 minutes).
+
+---
+
 ## Troubleshooting
 
 | Problem | Fix |
