@@ -308,7 +308,7 @@ Backups are saved as timestamped zips in `backup/snapshots/`. The last 3 daily b
 
 ### Schedule
 
-The backup runs daily at **2:00 AM** via Windows Task Scheduler (`\Kaivalya\Appwrite Daily Backup`).
+The backup runs daily at **1:00 PM** (lunch break) via Windows Task Scheduler (`\Kaivalya\Appwrite Daily Backup`).
 If the PC is off at that time, the backup runs automatically the next time the PC boots.
 
 ### One-Time Setup (already done on production PC)

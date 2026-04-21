@@ -1,6 +1,6 @@
 # Appwrite Restore Script
-# Usage: run this script and pick a backup zip when prompted
-# WARNING: This OVERWRITES current data. Stop containers before restoring.
+# Usage: run this script and pick a backup when prompted
+# WARNING: This OVERWRITES current data.
 
 $DB_CONTAINER = "appwrite-mariadb"
 $DB_NAME      = "appwrite"
@@ -17,27 +17,30 @@ function Log($msg) {
     Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $msg"
 }
 
-# --- Pick backup zip ---
 # Resolve paths relative to this script's location so it works on any machine
 $ScriptDir    = Split-Path -Parent $MyInvocation.MyCommand.Path
 $SnapshotsDir = Join-Path $ScriptDir "snapshots"
-$Zips = Get-ChildItem -Path $SnapshotsDir -Filter "appwrite-backup-*.zip" | Sort-Object LastWriteTime -Descending
 
-if ($Zips.Count -eq 0) {
-    Write-Host "No backup zips found in $SnapshotsDir" -ForegroundColor Red
+# --- Pick backup ---
+$Backups = Get-ChildItem -Path $SnapshotsDir -Directory -Filter "????-??-??_??-??" |
+           Sort-Object Name -Descending
+
+if ($Backups.Count -eq 0) {
+    Write-Host "No backups found in $SnapshotsDir" -ForegroundColor Red
     exit 1
 }
 
 Write-Host ""
 Write-Host "Available backups:" -ForegroundColor Cyan
-for ($i = 0; $i -lt $Zips.Count; $i++) {
-    Write-Host "  [$i] $($Zips[$i].Name)  ($([math]::Round($Zips[$i].Length/1MB, 2)) MB)"
+for ($i = 0; $i -lt $Backups.Count; $i++) {
+    $size = [math]::Round((Get-ChildItem $Backups[$i].FullName -Recurse | Measure-Object -Property Length -Sum).Sum / 1MB, 2)
+    Write-Host "  [$i] $($Backups[$i].Name)  ($size MB)"
 }
 Write-Host ""
 $Choice = Read-Host "Enter number to restore (default: 0 = most recent)"
 if ($Choice -eq "") { $Choice = 0 }
-$ZipFile = $Zips[$Choice].FullName
-Log "Selected: $ZipFile"
+$BackupDir = $Backups[$Choice].FullName
+Log "Selected: $BackupDir"
 
 # --- Confirm ---
 Write-Host ""
@@ -49,11 +52,6 @@ if ($Confirm -ne "YES") {
     Write-Host "Restore cancelled." -ForegroundColor Gray
     exit 0
 }
-
-# --- Extract zip to temp folder ---
-$TempDir = "$env:TEMP\appwrite-restore-$(Get-Date -Format 'yyyyMMdd-HHmmss')"
-Log "Extracting zip to $TempDir ..."
-Expand-Archive -Path $ZipFile -DestinationPath $TempDir -Force
 
 # --- Stop Appwrite containers (keep mariadb running for the DB restore) ---
 Log "Stopping Appwrite containers (except mariadb)..."
@@ -67,9 +65,8 @@ Log "Containers stopped."
 
 # --- 1. Restore database ---
 Log "Restoring database from appwrite-db.sql ..."
-$SqlFile = "$TempDir\appwrite-db.sql"
+$SqlFile = "$BackupDir\appwrite-db.sql"
 
-# Drop and recreate the database, then pipe the dump in
 docker exec -i $DB_CONTAINER mysql -uroot -p"$DB_ROOT_PASS" -e "DROP DATABASE IF EXISTS $DB_NAME; CREATE DATABASE $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
 Get-Content $SqlFile | docker exec -i $DB_CONTAINER mysql -uroot -p"$DB_ROOT_PASS" $DB_NAME
 
@@ -82,9 +79,9 @@ Log "Database restored."
 
 # --- 2. Restore volumes ---
 foreach ($entry in $Volumes.GetEnumerator()) {
-    $TarFile   = $entry.Key
+    $TarFile    = $entry.Key
     $VolumeName = $entry.Value
-    $TarPath   = "$TempDir\$TarFile"
+    $TarPath    = "$BackupDir\$TarFile"
 
     if (-not (Test-Path $TarPath)) {
         Log "WARNING: $TarFile not found in backup, skipping $VolumeName"
@@ -93,10 +90,9 @@ foreach ($entry in $Volumes.GetEnumerator()) {
 
     Log "Restoring volume $VolumeName from $TarFile ..."
 
-    # Wipe the volume contents, then extract the tar into it
     docker run --rm `
         -v "${VolumeName}:/data" `
-        -v "${TempDir}:/backup:ro" `
+        -v "${BackupDir}:/backup:ro" `
         alpine sh -c "rm -rf /data/* /data/.[!.]* 2>/dev/null; tar -xf /backup/$TarFile -C /data"
 
     if ($LASTEXITCODE -ne 0) {
@@ -110,10 +106,6 @@ foreach ($entry in $Volumes.GetEnumerator()) {
 Log "Starting all containers..."
 docker compose up -d
 Pop-Location
-
-# --- Cleanup temp ---
-Remove-Item -Recurse -Force $TempDir
-Log "Temp files cleaned up."
 
 Write-Host ""
 Write-Host "Restore complete. Appwrite is back up." -ForegroundColor Green

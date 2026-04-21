@@ -9,7 +9,7 @@ $Action = New-ScheduledTaskAction `
     -Execute "powershell.exe" `
     -Argument "-ExecutionPolicy Bypass -WindowStyle Hidden -File `"$BackupScript`""
 
-$Trigger = New-ScheduledTaskTrigger -Daily -At "02:00AM"
+$Trigger = New-ScheduledTaskTrigger -Daily -At "01:00PM"
 
 $Settings = New-ScheduledTaskSettingsSet `
     -StartWhenAvailable `
@@ -26,5 +26,5 @@ Register-ScheduledTask `
     -Description "Daily backup of Appwrite DB and storage volumes to local folder" `
     -Force
 
-Write-Host "Task registered. It will run daily at 2:00 AM." -ForegroundColor Green
+Write-Host "Task registered. It will run daily at 1:00 PM." -ForegroundColor Green
 Write-Host "Backups will be saved to: $(Join-Path $ScriptDir 'snapshots')" -ForegroundColor Cyan

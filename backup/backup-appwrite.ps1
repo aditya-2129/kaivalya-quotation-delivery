@@ -1,6 +1,6 @@
 # Appwrite Local Backup Script
 # Backs up: MariaDB database dump + uploads + config + certificates
-# Schedule via Windows Task Scheduler to run nightly
+# Scheduled via Windows Task Scheduler to run daily at 1:00 PM
 
 # Resolve paths relative to this script's location so it works on any machine
 $ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -50,7 +50,6 @@ foreach ($entry in $Volumes.GetEnumerator()) {
     $SubFolder  = $entry.Value
     Log "Copying volume $VolumeName -> $SubFolder ..."
 
-    # Use a temporary Alpine container to tar the volume contents out
     $TarPath = "$BackupDir\$SubFolder.tar"
     docker run --rm `
         -v "${VolumeName}:/data:ro" `
@@ -64,31 +63,17 @@ foreach ($entry in $Volumes.GetEnumerator()) {
     }
 }
 
-# --- 3. Compress everything into a single zip ---
-Log "Compressing backup to zip..."
-$ZipPath = "$BackupRoot\appwrite-backup-$Timestamp.zip"
-Compress-Archive -Path "$BackupDir\*" -DestinationPath $ZipPath -CompressionLevel Optimal
-
-if ($?) {
-    Log "Zip created: $ZipPath"
-    # Remove the uncompressed folder to save space
-    Remove-Item -Recurse -Force $BackupDir
-    Log "Cleaned up temp folder: $BackupDir"
-} else {
-    Log "WARNING: Zip failed, keeping uncompressed folder at $BackupDir"
-}
-
-# --- 4. Retention: keep only last 7 backups ---
-Log "Applying retention policy (keep last 7 backups)..."
-$AllBackups = Get-ChildItem -Path $BackupRoot -Filter "appwrite-backup-*.zip" |
-              Sort-Object LastWriteTime -Descending
+# --- 3. Retention: keep only last 3 backups ---
+Log "Applying retention policy (keep last 3 backups)..."
+$AllBackups = Get-ChildItem -Path $BackupRoot -Directory -Filter "????-??-??_??-??" |
+              Sort-Object Name -Descending
 if ($AllBackups.Count -gt 3) {
     $ToDelete = $AllBackups | Select-Object -Skip 3
-    foreach ($file in $ToDelete) {
-        Remove-Item -Force $file.FullName
-        Log "Deleted old backup: $($file.Name)"
+    foreach ($dir in $ToDelete) {
+        Remove-Item -Recurse -Force $dir.FullName
+        Log "Deleted old backup: $($dir.Name)"
     }
 }
 
-Log "=== Backup completed: $ZipPath ==="
+Log "=== Backup completed: $BackupDir ==="
 Log ""
