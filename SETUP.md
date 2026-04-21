@@ -304,7 +304,7 @@ Automated daily backups are configured for the Appwrite database and storage vol
 | `certificates.tar` | SSL certificates |
 | `imports.tar` | Import data |
 
-Backups are saved as timestamped zips in `backup/snapshots/`. The last 7 daily backups are kept automatically.
+Backups are saved as timestamped zips in `backup/snapshots/`. The last 3 daily backups are kept automatically.
 
 ### Schedule
 

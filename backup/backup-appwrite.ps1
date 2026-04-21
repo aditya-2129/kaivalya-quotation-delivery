@@ -82,8 +82,8 @@ if ($?) {
 Log "Applying retention policy (keep last 7 backups)..."
 $AllBackups = Get-ChildItem -Path $BackupRoot -Filter "appwrite-backup-*.zip" |
               Sort-Object LastWriteTime -Descending
-if ($AllBackups.Count -gt 7) {
-    $ToDelete = $AllBackups | Select-Object -Skip 7
+if ($AllBackups.Count -gt 3) {
+    $ToDelete = $AllBackups | Select-Object -Skip 3
     foreach ($file in $ToDelete) {
         Remove-Item -Force $file.FullName
         Log "Deleted old backup: $($file.Name)"
