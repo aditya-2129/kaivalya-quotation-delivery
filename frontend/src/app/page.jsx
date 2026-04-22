@@ -282,11 +282,11 @@ export default function Home() {
         {/* Page heading */}
         <div className="shrink-0">
           <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
-            Industrial Precision <span className="text-brand-primary">Dashboard</span>
+            Kaivalya Engineering <span className="text-brand-primary">Dashboard</span>
           </h1>
-          <p className="mt-1 font-medium text-zinc-400" style={{ fontSize: THEME.FONT_SIZE.SMALL }}>
+          {/* <p className="mt-1 font-medium text-zinc-400" style={{ fontSize: THEME.FONT_SIZE.SMALL }}>
             Real-time command view · revenue, approvals &amp; pipeline at a glance.
-          </p>
+          </p> */}
         </div>
 
         {/* Revenue Banner */}
@@ -295,7 +295,7 @@ export default function Home() {
         </div>
 
         {/* KPI Row */}
-        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 shrink-0">
+        {/* <section className="grid grid-cols-2 gap-3 sm:grid-cols-4 shrink-0">
           <KPICard
             label="Pipeline Value"
             value={stats ? formatCurrencyShort(stats.pipelineValue) : "—"}
@@ -325,7 +325,7 @@ export default function Home() {
             icon={Package}
             loading={statsLoading}
           />
-        </section>
+        </section> */}
 
         {/* Bottom grid */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
