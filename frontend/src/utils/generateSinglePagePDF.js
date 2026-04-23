@@ -4,10 +4,9 @@ import { COMPANY, numberToWords, loadImage, safeParseItems, safeParseBreakdown }
 
 const MARGIN = 10;
 
-export async function generateSinglePagePDF(quote, projectImageUrl = null, { save = true } = {}) {
+export async function drawSinglePageContent(doc, quote, projectImageUrl = null) {
   if (!quote) return;
 
-  const doc = new jsPDF('p', 'mm', 'a4');
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = MARGIN;
@@ -400,7 +399,14 @@ export async function generateSinglePagePDF(quote, projectImageUrl = null, { sav
     ? new Date(quote.inquiry_date).toLocaleDateString('en-GB').replace(/\//g, '-') 
     : new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
 
-  const filename = `${sanitizedClient} ${sanitizedQtn} ${qtnDate}.pdf`.trim();
+  return `${sanitizedClient} ${sanitizedQtn} ${qtnDate}.pdf`.trim();
+}
+
+export async function generateSinglePagePDF(quote, projectImageUrl = null, { save = true } = {}) {
+  if (!quote) return;
+
+  const doc = new jsPDF('p', 'mm', 'a4');
+  const filename = await drawSinglePageContent(doc, quote, projectImageUrl);
   
   if (save) doc.save(filename);
   return doc;

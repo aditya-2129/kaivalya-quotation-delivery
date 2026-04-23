@@ -87,7 +87,7 @@ export default function MaterialsPage() {
                 <tr style={{ fontSize: THEME.FONT_SIZE.TINY }}>
                   <th className="px-6 py-4 font-bold text-zinc-400 uppercase tracking-widest leading-none">Material Grade</th>
                   <th className="px-6 py-4 font-bold text-zinc-400 uppercase tracking-widest leading-none">Category Name</th>
-                  <th className="px-6 py-4 font-bold text-zinc-400 uppercase tracking-widest text-center">Form Factor</th>
+                  <th className="px-6 py-4 font-bold text-zinc-400 uppercase tracking-widest text-center">Shape</th>
                   <th className="px-6 py-4 font-bold text-zinc-400 uppercase tracking-widest text-center">Density</th>
                   <th className="px-6 py-4 font-bold text-zinc-400 uppercase tracking-widest text-right">Base Rate (per kg)</th>
                   <th className="px-6 py-4 font-bold text-zinc-400 uppercase tracking-widest text-right">Actions</th>

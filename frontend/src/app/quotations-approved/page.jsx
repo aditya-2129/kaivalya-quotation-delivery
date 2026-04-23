@@ -12,13 +12,15 @@ import { COMPANY } from '@/constants/pdfConstants';
 import QuotationPreviewModal from '@/components/modals/QuotationPreviewModal';
 import DownloadOptionsModal from '@/components/modals/DownloadOptionsModal';
 import PdfPreviewModal from '@/components/modals/PdfPreviewModal';
+import ExcelPreviewModal from '@/components/modals/ExcelPreviewModal';
 import Pagination from '@/components/ui/Pagination';
+import PreviewSelectModal from '@/components/modals/PreviewSelectModal';
 import { generateQuotationPDF } from '@/utils/generateQuotationPDF';
 import { generateMaterialListPDF } from '@/utils/generateMaterialListPDF';
 import { generateSinglePagePDF } from '@/utils/generateSinglePagePDF';
 import { generateProcessSheetPDF } from '@/utils/generateProcessSheetPDF';
 import { generateBOPListPDF } from '@/utils/generateBOPListPDF';
-import { exportQuotationsToExcel } from '@/utils/exportToExcel';
+import { exportQuotationsToExcel, exportMaterialListToExcel, exportProcessSheetToExcel, exportBOPListToExcel, exportFullQuotationToExcel } from '@/utils/exportToExcel';
 import { useApprovedQuotations, useApprovedMetrics } from '@/features/quotations/api/useApprovedQuotations';
 import { useUsers } from '@/features/admin/api/useUsers';
 import { Search, Filter, X, Calendar, FileCheck, TrendingUp, ChevronRight, FileSpreadsheet, Briefcase, Clock } from 'lucide-react';
@@ -56,10 +58,14 @@ export default function ApprovedQuotationsPage() {
       // Fetch everything matching filters (up to 5000 records)
       const allData = await approvedQuotationService.listApprovedQuotations(5000, 0, filters);
       
-      exportQuotationsToExcel(allData.documents, `Approved_Quotations_${new Date().toISOString().split('T')[0]}.xlsx`);
-      
       toast.dismiss();
-      toast.success("Registry exported successfully!");
+      setExcelPreview({
+        open: true,
+        title: "Approved Quotations (Registry)",
+        filename: `Approved_Quotations_${new Date().toISOString().split('T')[0]}.xlsx`,
+        optionId: 'quotations_excel',
+        data: allData.documents
+      });
     } catch (err) {
       toast.dismiss();
       toast.error("Export failed. Please try again.");
@@ -84,9 +90,17 @@ export default function ApprovedQuotationsPage() {
     setPage(1);
   };
 
+  const [previewSelect, setPreviewSelect] = useState({ open: false, row: null });
   const [previewId, setPreviewId] = useState(null);
   const [downloadModal, setDownloadModal] = useState({ open: false, quotation: null });
   const [pdfPreview, setPdfPreview] = useState({ open: false, doc: null, title: '', filename: '' });
+  const [excelPreview, setExcelPreview] = useState({
+    open: false,
+    title: "",
+    filename: "",
+    optionId: null,
+    quotation: null
+  });
 
   const handlePoLogged = () => {
     queryClient.invalidateQueries({ queryKey: ['approved-quotations'] });
@@ -96,12 +110,46 @@ export default function ApprovedQuotationsPage() {
   const quotations = data?.documents || [];
   const total = data?.total || 0;
 
-  const handleDownloadExecution = async (optionId) => {
-    const quotation = downloadModal.quotation;
+  const handleDownloadExecution = async (optionId, rowOverride, isFromPreview = false) => {
+    const quotation = rowOverride || downloadModal.quotation;
     if (!quotation) return;
 
     try {
       const fullQuote = await approvedQuotationService.getQuotation(quotation.$id);
+
+      // ─── Excel exports (with preview) ───
+      if (optionId.endsWith('_excel')) {
+        setDownloadModal({ open: false, quotation: null });
+        
+        let title = "Excel Preview";
+        let filename = "document.xlsx";
+
+        if (optionId === 'material_excel') {
+          title = "Material List (Excel)";
+          filename = `MaterialList_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'process_excel') {
+          title = "Process Sheet (Excel)";
+          filename = `ProcessSheet_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'bop_excel') {
+          title = "BOP List (Excel)";
+          filename = `BOP_List_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'full_excel') {
+          title = "Full Quotation (Excel)";
+          filename = `Full_Quotation_${fullQuote.quotation_no}.xlsx`;
+        }
+
+        setExcelPreview({
+          open: true,
+          title,
+          filename,
+          optionId,
+          quotation: fullQuote,
+          hideDownload: isFromPreview
+        });
+        return;
+      }
+
+      // ─── PDF exports (with preview) ───
       let projectImageUrl = null;
       if (fullQuote.project_image) {
         try {
@@ -152,6 +200,34 @@ export default function ApprovedQuotationsPage() {
     } catch (err) {
       toast.error("Export failed.");
     }
+  };
+
+  const handleExcelDownload = () => {
+    const { optionId, quotation, filename, data: exportData } = excelPreview;
+    if (!optionId) return;
+
+    toast.loading('Generating Excel export...', { id: 'excel-gen' });
+    
+    if (optionId === 'quotations_excel' && exportData) {
+      exportQuotationsToExcel(exportData, filename);
+    } else if (quotation) {
+      if (optionId === 'material_excel') {
+        exportMaterialListToExcel(quotation, filename);
+      } else if (optionId === 'process_excel') {
+        exportProcessSheetToExcel(quotation, filename);
+      } else if (optionId === 'bop_excel') {
+        exportBOPListToExcel(quotation, filename);
+      } else if (optionId === 'full_excel') {
+        exportFullQuotationToExcel(quotation, filename);
+      }
+    } else {
+      toast.dismiss('excel-gen');
+      toast.error('No data available for export.');
+      return;
+    }
+
+    toast.dismiss('excel-gen');
+    toast.success('Excel file downloaded successfully!');
   };
 
   const handleSendEmail = async (quotation) => {
@@ -430,7 +506,7 @@ export default function ApprovedQuotationsPage() {
                          <div className="flex justify-end gap-2">
                            {/* Preview */}
                            <button 
-                               onClick={() => setPreviewId(row.$id)} 
+                               onClick={() => setPreviewSelect({ open: true, row: row })} 
                                className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-400 hover:text-brand-primary hover:border-brand-primary/30 transition-all shadow-sm active:scale-90"
                                title="Preview Protocol"
                            >
@@ -481,6 +557,20 @@ export default function ApprovedQuotationsPage() {
         quotationId={previewId}
       />
 
+      <PreviewSelectModal 
+        isOpen={previewSelect.open}
+        onClose={() => setPreviewSelect({ open: false, row: null })}
+        quotationNo={previewSelect.row?.quotation_no || previewSelect.row?.$id?.substring(0,8)}
+        onSelectNormal={() => {
+          setPreviewId(previewSelect.row.$id);
+          setPreviewSelect({ open: false, row: null });
+        }}
+        onSelectExcel={() => {
+          handleDownloadExecution('full_excel', previewSelect.row, true);
+          setPreviewSelect({ open: false, row: null });
+        }}
+      />
+
       <DownloadOptionsModal 
         isOpen={downloadModal.open}
         onClose={() => setDownloadModal({ open: false, quotation: null })}
@@ -494,6 +584,18 @@ export default function ApprovedQuotationsPage() {
         pdfDoc={pdfPreview.doc}
         title={pdfPreview.title}
         filename={pdfPreview.filename}
+      />
+
+      <ExcelPreviewModal
+        isOpen={excelPreview.open}
+        onClose={() => setExcelPreview({ ...excelPreview, open: false })}
+        onDownload={handleExcelDownload}
+        title={excelPreview.title}
+        filename={excelPreview.filename}
+        quotation={excelPreview.quotation}
+        optionId={excelPreview.optionId}
+        data={excelPreview.data}
+        hideDownload={excelPreview.hideDownload}
       />
 
       {showDatePicker && (

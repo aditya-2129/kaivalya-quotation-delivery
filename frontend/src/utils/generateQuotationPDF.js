@@ -1,8 +1,9 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { COMPANY, COLORS, numberToWords, loadImage, safeParseItems, safeParseBreakdown } from '../constants/pdfConstants';
+import { drawSinglePageContent } from './generateSinglePagePDF';
 
-const MARGIN = 20; // Full quotation uses wider margins for breathable cover
+const MARGIN = 10; 
 
 export async function generateQuotationPDF(quote, projectImageUrl = null, { save = true } = {}) {
   if (!quote) return;
@@ -16,245 +17,180 @@ export async function generateQuotationPDF(quote, projectImageUrl = null, { save
   const items = safeParseItems(quote.items);
   const breakdown = safeParseBreakdown(quote.detailed_breakdown);
 
-  // ---------------------------------------------------------
-  // PAGE 1: COVER PAGE
-  // ---------------------------------------------------------
-  
-  // 1. Sidebar Accent
-  doc.setFillColor(...COLORS.PRIMARY);
-  doc.rect(0, 0, 10, pageHeight, 'F');
-  
-  // 2. Logo
-  try {
-    const { dataUrl } = await loadImage('/KE_Logo.png');
-    doc.addImage(dataUrl, 'PNG', 20, 15, 60, 22);
-  } catch (e) {
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(22);
-    doc.setTextColor(...COLORS.PRIMARY);
-    doc.text(COMPANY.NAME, 20, 25);
-  }
+  // Helper to draw the header on any page (Handles overflow automatically)
+  const drawStandardHeader = (doc, pageNo, totalPages) => {
+      doc.setPage(pageNo);
+      doc.setLineWidth(0.2);
+      doc.setDrawColor(180);
+      doc.line(margin, margin, pageWidth - margin, margin);
 
-  // 3. Document Label
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(38);
-  doc.setTextColor(...COLORS.TEXT_DARK);
-  doc.text("QUOTATION", 20, 65);
-  doc.setLineWidth(1.5);
-  doc.setDrawColor(...COLORS.PRIMARY);
-  doc.line(20, 70, 70, 70);
+      const headerY = margin + 5;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(12);
+      doc.setTextColor(30, 64, 125); // Apply Premium Navy Blue for brand consistency
+      doc.text(COMPANY.NAME, margin, headerY);
+      
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100);
+      const metadataStr = `QTN: ${quote.quotation_no} | DATE: ${new Date().toLocaleDateString('en-GB')} | Page ${pageNo} of ${totalPages}`;
+      doc.text(metadataStr, pageWidth - margin, headerY, { align: 'right' });
+      
+      doc.line(margin, headerY + 3, pageWidth - margin, headerY + 3);
+  };
 
-  // 4. Project Identity Section
-  let y = 85;
+  // PAGE 1: Formal Summary (Keep high-fidelity as it is the cover)
+  await drawSinglePageContent(doc, quote, projectImageUrl);
+
+  // PAGE 2: MATERIAL LIST (Excel Style)
+  doc.addPage();
+  
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.setTextColor(...COLORS.TEXT_LIGHT);
-  doc.text("PROJECT REFERENCE:", 20, y);
+  doc.setTextColor(0);
+  doc.text("SECTION 01: RAW MATERIAL SPECIFICATIONS", pageWidth / 2, 25, { align: 'center' });
   
-  y += 10;
-  doc.setFontSize(26);
-  doc.setTextColor(...COLORS.TEXT_DARK);
-  const projTitle = (quote.project_name || "Manufacturing Project").toUpperCase();
-  const wrappedTitle = doc.splitTextToSize(projTitle, contentWidth);
-  doc.text(wrappedTitle, 20, y);
-  
-  y += (wrappedTitle.length * 10);
-  
-  // Small QTN Details
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(...COLORS.TEXT_DARK);
-  doc.text(`REFERENCE: ${quote.quotation_no}`, 20, y);
-  doc.text(`DATE: ${new Date().toLocaleDateString('en-GB')}`, contentWidth + 20, y, { align: 'right' });
+  let cY = 32; 
 
-  // 5. Technical Visual (MAXIMIZED)
-  const snapshotBoxY = y + 10;
-  const snapshotBoxH = pageHeight - snapshotBoxY - 70; // Allocating large central space
+  const rawMaterials = items.filter(item => item.material).map((item, index) => {
+    const dims = item.dimensions || {};
+    let dimStr = '—';
+    if (item.shape === 'rect') dimStr = `${dims.l}x${dims.w}x${dims.t}`;
+    else if (item.shape === 'round') dimStr = `Dia ${dims.dia} x ${dims.l}`;
+    else if (item.shape === 'hex') dimStr = `AF ${dims.af} x ${dims.l}`;
 
-  if (projectImageUrl) {
-      try {
-        const { dataUrl, width, height } = await loadImage(projectImageUrl);
-        const imgRatio = width / height;
-        const boxRatio = contentWidth / snapshotBoxH;
-        
-        let dW, dH;
-        if (imgRatio > boxRatio) {
-            dW = contentWidth;
-            dH = contentWidth / imgRatio;
-        } else {
-            dH = snapshotBoxH;
-            dW = snapshotBoxH * imgRatio;
-        }
-        
-        const dX = 20 + (contentWidth - dW) / 2;
-        const dY = snapshotBoxY + (snapshotBoxH - dH) / 2;
-        
-        doc.addImage(dataUrl, 'PNG', dX, dY, dW, dH, undefined, 'FAST');
-      } catch (e) {
-          doc.setDrawColor(...COLORS.BORDER);
-          doc.roundedRect(20, snapshotBoxY, contentWidth, snapshotBoxH, 2, 2, 'D');
-          doc.setFontSize(12);
-          doc.setTextColor(...COLORS.TEXT_LIGHT);
-          doc.text("[ RELEVANT TECHNICAL PORTFOLIO IMAGE ]", pageWidth / 2, snapshotBoxY + (snapshotBoxH / 2), { align: 'center' });
-      }
-  }
-
-  // 6. Client Footer Section
-  const footerY = pageHeight - 45;
-  doc.setLineWidth(0.5);
-  doc.setDrawColor(...COLORS.BORDER);
-  doc.line(20, footerY - 5, contentWidth + 20, footerY - 5);
-  
-  doc.setFontSize(9);
-  doc.setTextColor(...COLORS.TEXT_LIGHT);
-  doc.setFont('helvetica', 'bold');
-  doc.text("PREPARED FOR", 20, footerY);
-  
-  doc.setFontSize(16);
-  doc.setTextColor(...COLORS.TEXT_DARK);
-  doc.text(`M/s ${quote.supplier_name || 'Client'}`, 20, footerY + 8);
-  
-  doc.setFontSize(10);
-  doc.setTextColor(...COLORS.TEXT_LIGHT);
-  doc.setFont('helvetica', 'normal');
-  doc.text(quote.contact_person ? `Attn: ${quote.contact_person}` : "", 20, footerY + 14);
-
-  // Bottom Branding Contact
-  doc.setFontSize(9);
-  doc.setTextColor(...COLORS.PRIMARY);
-  doc.setFont('helvetica', 'bold');
-  doc.text(COMPANY.NAME, contentWidth + 20, footerY + 8, { align: 'right' });
-  doc.setFontSize(8);
-  doc.setTextColor(...COLORS.TEXT_LIGHT);
-  doc.setFont('helvetica', 'normal');
-  doc.text(COMPANY.TAGLINE, contentWidth + 20, footerY + 13, { align: 'right' });
-
-  // ---------------------------------------------------------
-  // PAGE 2: SUMMARY & COMMERCIALS
-  // ---------------------------------------------------------
-  doc.addPage();
-  const drawPageHeader = (pageNo, totalPages) => {
-      doc.setFillColor(...COLORS.BG_LIGHT);
-      doc.rect(0, 0, pageWidth, 25, 'F');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(11);
-      doc.setTextColor(...COLORS.PRIMARY);
-      doc.text(COMPANY.NAME, 20, 12);
-      doc.setFontSize(8);
-      doc.setTextColor(...COLORS.TEXT_LIGHT);
-      doc.text(COMPANY.TAGLINE, 20, 17);
-      doc.setFontSize(9);
-      doc.setTextColor(...COLORS.TEXT_DARK);
-      doc.text(`QTN: ${quote.quotation_no}`, contentWidth + 20, 12, { align: 'right' });
-      doc.text(`Page ${pageNo} of ${totalPages}`, contentWidth + 20, 17, { align: 'right' });
-  };
-  
-  drawPageHeader(2, "X");
-
-  let cY = 40;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.setTextColor(...COLORS.TEXT_DARK);
-  doc.text("SECTION 01: COMMERCIAL OFFER", 20, cY);
-  cY += 12;
-
-  const projectQty = Number(quote.quantity ?? 1);
-  const finalGrandTotal = parseFloat(quote.total_amount || 0);
-  const unitRateFormatted = (finalGrandTotal / projectQty).toLocaleString('en-IN', {minimumFractionDigits: 2});
-  const totalFormatted = finalGrandTotal.toLocaleString('en-IN', {minimumFractionDigits: 2});
+    return [
+      index + 1,
+      item.part_name || '-',
+      item.material.grade || '-',
+      dimStr,
+      item.qty || 1,
+      `${parseFloat(item.material_weight || 0).toFixed(2)} kg`,
+      `${(parseFloat(item.material_weight || 0) * (item.qty || 1)).toFixed(2)} kg`,
+      `${parseFloat(item.material.base_rate || item.material.rate || 0).toFixed(2)}`,
+      `${(parseFloat(item.material_weight || 0) * (item.qty || 1) * parseFloat(item.material.base_rate || item.material.rate || 0)).toFixed(2)}`
+    ];
+  });
 
   autoTable(doc, {
     startY: cY,
-    margin: { left: 20, right: margin },
-    head: [['Ref.', 'Scope of Work / Description', 'Qty.', 'Unit Rate', 'Amount (INR)']],
-    body: [[
-      "1.0",
-      `${quote.project_name || 'Industrial Project'}\n(Engineering, Manufacturing and Precision Finish as per Tech Model)`,
-      `${projectQty} Set`,
-      `Rs. ${unitRateFormatted}`,
-      `Rs. ${totalFormatted}`
-    ]],
+    margin: { left: margin, right: margin, top: 25 }, // top margin ensures overflow pages don't overlap header
+    head: [['Sr.', 'Part Name', 'Material', 'Dimensions (mm)', 'Qty', 'Unit Wt', 'Total Wt', 'Rate', 'Amount']],
+    body: rawMaterials,
     theme: 'grid',
-    styles: { fontSize: 10, cellPadding: 6, textColor: [39, 39, 42] },
-    headStyles: { fillColor: [40, 40, 40], textColor: [255, 255, 255], fontStyle: 'bold' },
-    columnStyles: { 2: { halign: 'center' }, 3: { halign: 'right' }, 4: { halign: 'right', fontStyle: 'bold' } }
+    styles: { fontSize: 8, cellPadding: 2, textColor: [0, 0, 0], lineColor: [200, 200, 200], lineWidth: 0.1 },
+    headStyles: { fillColor: [60, 60, 60], textColor: [255, 255, 255], fontStyle: 'bold' },
+    columnStyles: { 
+      0: { cellWidth: 8 }, 
+      4: { halign: 'center', cellWidth: 10 }, 
+      5: { halign: 'right' }, 
+      6: { halign: 'right' },
+      7: { halign: 'right' },
+      8: { halign: 'right', fontStyle: 'bold' }
+    }
   });
 
-  cY = doc.lastAutoTable.finalY + 12;
+  // PAGE 3: MANUFACTURING PROCESS ROADMAP (Excel Style)
+  doc.addPage();
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text(`TOTAL PROJECT VALUE: Rs. ${totalFormatted}/-`, 20, cY);
-  cY += 6;
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'italic');
-  doc.setTextColor(...COLORS.TEXT_LIGHT);
-  doc.text(`(Rupees ${numberToWords(Math.floor(finalGrandTotal))})`, 20, cY);
+  doc.text("SECTION 02: MANUFACTURING PROCESS ROADMAP", pageWidth / 2, 25, { align: 'center' });
+  cY = 32;
 
-  cY += 15;
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.setTextColor(...COLORS.TEXT_DARK);
-  doc.text("STANDARD BUSINESS TERMS", 20, cY);
-  cY += 8;
-  const terms = [
-    "• Delivery: Within mutually agreed schedule from PO date.",
-    "• Payment: Standard terms as finalized during commercial review.",
-    "• Taxes: GST @ 18% extra as applicable on final invoice.",
-    "• Freight: Charged as per actuals or as mentioned.",
-    "• Jurisdiction: Subject to Pune courts only."
-  ];
-  terms.forEach(t => {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.text(t, 20, cY);
-    cY += 7;
+  const allProcesses = [];
+  items.forEach((item, index) => {
+    const processes = item.processes || [];
+    const qty = item.qty || 1;
+    if (processes.length === 0) {
+      allProcesses.push([`${index + 1}`, item.part_name, 'Standard Precision', '-', '-', 'Workshop', '0.00', '0.00']);
+    } else {
+      processes.forEach((p, pIdx) => {
+        const rate = parseFloat(p.rate || p.hourly_rate || 0);
+        const setup = parseFloat(p.setup_time || 0);
+        const cycle = parseFloat(p.cycle_time || 0);
+        const unit = p.unit || 'hr';
+        
+        let amount = 0;
+        if (unit === 'hr') {
+          // Time is in minutes, rate is per hour. Convert total time to hours.
+          const totalTimeMin = setup + (cycle * qty);
+          amount = (totalTimeMin / 60) * rate;
+        } else {
+          // Assume rate is per piece or per minute depending on the system config
+          amount = (setup + (cycle * qty)) * rate;
+        }
+
+        allProcesses.push([
+          pIdx === 0 ? `${index + 1}` : '', 
+          pIdx === 0 ? item.part_name : '', 
+          p.process_name || '-',
+          setup.toFixed(2),
+          cycle.toFixed(2),
+          `${rate.toFixed(2)}/${unit}`,
+          amount.toFixed(2)
+        ]);
+      });
+    }
   });
 
-  // ---------------------------------------------------------
-  // PAGE 3: TECHNICAL DATA
-  // ---------------------------------------------------------
-  doc.addPage();
-  drawPageHeader(3, "X");
-  
-  cY = 40;
-  doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
-  doc.text("SECTION 02: TECHNICAL PORTFOLIO", 20, cY);
-  cY += 12;
+  autoTable(doc, {
+    startY: cY,
+    margin: { left: margin, right: margin, top: 25 },
+    head: [['Sr.', 'Part Name', 'Operation', 'Setup', 'Cycle', 'Rate', 'Amount']],
+    body: allProcesses,
+    theme: 'grid',
+    styles: { fontSize: 8, cellPadding: 2, textColor: [0, 0, 0], lineColor: [200, 200, 200], lineWidth: 0.1 },
+    headStyles: { fillColor: [60, 60, 60], textColor: [255, 255, 255], fontStyle: 'bold' },
+    columnStyles: { 
+      0: { cellWidth: 8 }, 
+      3: { halign: 'right' }, 
+      4: { halign: 'right' }, 
+      5: { halign: 'right' },
+      6: { halign: 'right', fontStyle: 'bold' }
+    }
+  });
 
-  const techRows = items.map((item, i) => [
-    i + 1,
-    item.part_name || 'Component',
-    item.material ? item.material.grade : '—',
-    item.material_weight ? `${item.material_weight} kg` : '—',
-    (item.processes || []).slice(0, 3).map(p => p.process_name).join(', ') || 'Standard'
+  // PAGE 4: BOP LIST (Excel Style)
+  doc.addPage();
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text("SECTION 03: PURCHASED COMPONENTS (BOP)", pageWidth / 2, 25, { align: 'center' });
+  cY = 32;
+
+  const bopItems = breakdown.bought_out_items || [];
+  const bopRows = bopItems.map((item, index) => [
+    index + 1,
+    item.item_name || '—',
+    item.unit || 'pcs',
+    item.qty || 0,
+    `${parseFloat(item.rate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    `${(parseFloat(item.rate || 0) * (item.qty || 1)).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   ]);
 
   autoTable(doc, {
     startY: cY,
-    margin: { left: 20, right: margin },
-    head: [['Sr.', 'Component', 'Material Grade', 'Weight', 'Primary Ops']],
-    body: techRows,
+    margin: { left: margin, right: margin, top: 25 },
+    head: [['Sr.', 'Item Description', 'Unit', 'Qty', 'Rate', 'Total']],
+    body: bopRows.length > 0 ? bopRows : [['-', 'No items specified', '-', '-', '-', '-']],
     theme: 'grid',
-    styles: { fontSize: 9.5, cellPadding: 4 },
-    headStyles: { fillColor: COLORS.PRIMARY }
+    styles: { fontSize: 8.5, cellPadding: 2, textColor: [0, 0, 0], lineColor: [200, 200, 200], lineWidth: 0.1 },
+    headStyles: { fillColor: [60, 60, 60], textColor: [255, 255, 255], fontStyle: 'bold' }
   });
 
-  // Page Numbers Polish
+  // FINAL PASS: Draw Branding and Page Numbers on ALL pages (Handles overflow automatically)
   const totalPages = doc.internal.getNumberOfPages();
   for (let i = 2; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFontSize(9);
-    doc.setTextColor(...COLORS.TEXT_LIGHT);
-    doc.text(`Page ${i} of ${totalPages}`, contentWidth + 20, 17, { align: 'right' });
+    drawStandardHeader(doc, i, totalPages);
     
     if (i === totalPages) {
-       const sigY = doc.lastAutoTable.finalY + 30;
+       doc.setPage(i);
+       const sigY = pageHeight - margin - 20;
        doc.setFont('helvetica', 'bold');
-       doc.setTextColor(...COLORS.TEXT_DARK);
-       doc.text(`for ${COMPANY.NAME}`, contentWidth + 20, sigY, { align: 'right' });
+       doc.setFontSize(10);
+       doc.setTextColor(0);
+       doc.text(`for ${COMPANY.NAME}`, pageWidth - margin, sigY, { align: 'right' });
        doc.setFont('helvetica', 'normal');
-       doc.text("Authorized Signatory", contentWidth + 20, sigY + 20, { align: 'right' });
+       doc.text("Authorized Signatory", pageWidth - margin, sigY + 10, { align: 'right' });
     }
   }
 

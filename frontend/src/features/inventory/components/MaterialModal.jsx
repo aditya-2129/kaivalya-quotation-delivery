@@ -128,12 +128,13 @@ export const MaterialModal = ({ material, onClose, onError }) => {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="block font-bold text-zinc-400 uppercase tracking-widest" style={{ fontSize: THEME.FONT_SIZE.TINY }}>
-                Form Factor <span className="text-red-500">*</span>
+                Shape <span className="text-red-500">*</span>
               </label>
               <IconInput icon={Box}>
                 <select required className={`${inputCls} appearance-none`} style={{ fontSize: THEME.FONT_SIZE.BASE }}
                   value={formData.shape} onChange={(e) => setFormData({ ...formData, shape: e.target.value })}>
                   {SHAPES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  {/* Form Factor - Now 'Shape' */}
                 </select>
               </IconInput>
             </div>

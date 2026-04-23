@@ -33,7 +33,7 @@ const DashboardLayout = ({ children, title, primaryAction }) => {
             userProfile={userProfile}
             onLogout={logout}
           />
-          <main className="mt-16 h-[calc(100vh-64px)] overflow-y-auto p-8">
+          <main className="mt-12 h-[calc(100vh-64px)] overflow-y-auto p-8">
             {children}
           </main>
         </div>

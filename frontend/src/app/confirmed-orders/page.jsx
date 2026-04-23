@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import React, { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import DashboardLayout from "@/components/layout/DashboardLayout";
-import { THEME } from '@/constants/ui';
-import { usePurchaseOrders, useOrderMetrics } from '@/features/quotations/api/usePurchaseOrders';
-import { useUsers } from '@/features/admin/api/useUsers';
+import { THEME } from "@/constants/ui";
+import {
+  usePurchaseOrders,
+  useOrderMetrics,
+} from "@/features/quotations/api/usePurchaseOrders";
+import { useUsers } from "@/features/admin/api/useUsers";
 import {
   Search,
   Calendar,
@@ -16,59 +19,91 @@ import {
   Clock,
   Settings2,
   IndianRupee,
-  FileSpreadsheet
-} from 'lucide-react';
-import Pagination from '@/components/ui/Pagination';
-import DateRangePicker from '@/components/ui/DateRangePicker';
-import { format, isSameDay } from 'date-fns';
-import { assetService } from '@/services/assets';
-import { purchaseOrderService } from '@/services/purchase-orders';
-import { toast } from 'react-hot-toast';
-import PdfPreviewModal from '@/components/modals/PdfPreviewModal';
-import OrderDetailsModal from '@/components/modals/OrderDetailsModal';
-import { exportPurchaseOrdersToExcel } from '@/utils/exportToExcel';
+  FileSpreadsheet,
+  Download,
+} from "lucide-react";
+import Pagination from "@/components/ui/Pagination";
+import DateRangePicker from "@/components/ui/DateRangePicker";
+import { format, isSameDay } from "date-fns";
+import { assetService } from "@/services/assets";
+import { purchaseOrderService } from "@/services/purchase-orders";
+import { approvedQuotationService } from "@/services/quotations-approved";
+import { toast } from "react-hot-toast";
+import PdfPreviewModal from "@/components/modals/PdfPreviewModal";
+import ExcelPreviewModal from "@/components/modals/ExcelPreviewModal";
+import DownloadOptionsModal from "@/components/modals/DownloadOptionsModal";
+import QuotationPreviewModal from "@/components/modals/QuotationPreviewModal";
+import { generateQuotationPDF } from "@/utils/generateQuotationPDF";
+import { generateMaterialListPDF } from "@/utils/generateMaterialListPDF";
+import { generateSinglePagePDF } from "@/utils/generateSinglePagePDF";
+import { generateProcessSheetPDF } from "@/utils/generateProcessSheetPDF";
+import { generateBOPListPDF } from "@/utils/generateBOPListPDF";
+import { exportPurchaseOrdersToExcel, exportMaterialListToExcel, exportProcessSheetToExcel, exportBOPListToExcel, exportFullQuotationToExcel } from "@/utils/exportToExcel";
+import PreviewSelectModal from '@/components/modals/PreviewSelectModal';
 
 export default function ConfirmedOrdersPage() {
   const [page, setPage] = useState(1);
   const limit = 25;
-  const [filters, setFilters] = useState({ 
-    search: '', 
-    engineer: 'All', 
-    status: 'All',
-    dateRange: { start: null, end: null, label: 'All Time' } 
+  const [filters, setFilters] = useState({
+    search: "",
+    engineer: "All",
+    status: "All",
+    dateRange: { start: null, end: null, label: "All Time" },
   });
   const [showDatePicker, setShowDatePicker] = useState(false);
   const queryClient = useQueryClient();
   const [updatingStatusId, setUpdatingStatusId] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
-  
+
   // Modal states
   const [previewFile, setPreviewFile] = useState(null);
-  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [previewSelect, setPreviewSelect] = useState({ open: false, order: null });
+  const [previewQuotationId, setPreviewQuotationId] = useState(null);
+  const [downloadModal, setDownloadModal] = useState({
+    open: false,
+    order: null,
+  });
+  const [pdfPreview, setPdfPreview] = useState({
+    open: false,
+    doc: null,
+    title: "",
+    filename: "",
+  });
+  const [excelPreview, setExcelPreview] = useState({
+    open: false,
+    title: "",
+    filename: "",
+    optionId: null,
+    quotation: null
+  });
 
   const { data: usersData } = useUsers();
   const engineers = usersData?.documents || [];
 
-  const { data, isLoading } = usePurchaseOrders(limit, (page - 1) * limit, filters);
+  const { data, isLoading } = usePurchaseOrders(
+    limit,
+    (page - 1) * limit,
+    filters,
+  );
   const { data: metrics, isLoading: metricsLoading } = useOrderMetrics(filters);
 
   const handleSearchChange = (e) => {
-    setFilters(prev => ({ ...prev, search: e.target.value }));
+    setFilters((prev) => ({ ...prev, search: e.target.value }));
     setPage(1);
   };
 
   const handleEngineerChange = (e) => {
-    setFilters(prev => ({ ...prev, engineer: e.target.value }));
+    setFilters((prev) => ({ ...prev, engineer: e.target.value }));
     setPage(1);
   };
 
   const handleStatusChange = (e) => {
-    setFilters(prev => ({ ...prev, status: e.target.value }));
+    setFilters((prev) => ({ ...prev, status: e.target.value }));
     setPage(1);
   };
 
   const handleDateRangeChange = (range) => {
-    setFilters(prev => ({ ...prev, dateRange: range }));
+    setFilters((prev) => ({ ...prev, dateRange: range }));
     setShowDatePicker(false);
     setPage(page); // Stay on current page if possible or set to 1
     if (range.start) setPage(1);
@@ -78,8 +113,8 @@ export default function ConfirmedOrdersPage() {
     try {
       setUpdatingStatusId(orderId);
       await purchaseOrderService.updateStatus(orderId, newStatus);
-      queryClient.invalidateQueries({ queryKey: ['purchase-orders'] });
-      queryClient.invalidateQueries({ queryKey: ['order-metrics'] });
+      queryClient.invalidateQueries({ queryKey: ["purchase-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["order-metrics"] });
       toast.success(`Order status updated to ${newStatus}`);
     } catch (error) {
       toast.error("Failed to update status");
@@ -91,26 +126,179 @@ export default function ConfirmedOrdersPage() {
   const handleExportExcel = async () => {
     try {
       setIsExporting(true);
-      toast.loading("Preparing orders export...", { id: 'export-orders' });
-      
+      toast.loading("Preparing orders export...", { id: "export-orders" });
+
       // Fetch data with current filters but higher limit for export
-      const exportData = await purchaseOrderService.listOrders(5000, 0, filters);
-      
+      const exportData = await purchaseOrderService.listOrders(
+        5000,
+        0,
+        filters,
+      );
+
       if (!exportData?.documents || exportData.documents.length === 0) {
-        toast.error("No orders found to export", { id: 'export-orders' });
+        toast.error("No orders found to export", { id: "export-orders" });
         return;
       }
 
-      const fileName = `Confirmed_Orders_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
-      exportPurchaseOrdersToExcel(exportData.documents, fileName);
-      
-      toast.success("Orders exported successfully", { id: 'export-orders' });
+      toast.dismiss("export-orders");
+      setExcelPreview({
+        open: true,
+        title: "Confirmed Orders (Registry)",
+        filename: `Confirmed_Orders_${format(new Date(), "yyyy-MM-dd")}.xlsx`,
+        optionId: 'po_excel',
+        data: exportData.documents
+      });
     } catch (error) {
       console.error("Export error:", error);
-      toast.error("Failed to export orders", { id: 'export-orders' });
+      toast.error("Failed to export orders", { id: "export-orders" });
     } finally {
       setIsExporting(false);
     }
+  };
+
+  const handleDownloadExecution = async (optionId, rowOverride, isFromPreview = false) => {
+    const order = rowOverride || downloadModal.order;
+    if (!order || !order.quotation_id) {
+      toast.error("Associated quotation not found.");
+      return;
+    }
+
+    try {
+      toast.loading("Generating report...", { id: "pdf-gen" });
+      const fullQuote = await approvedQuotationService.getQuotation(
+        order.quotation_id,
+      );
+
+      // ─── Excel exports (with preview) ───
+      if (optionId.endsWith('_excel')) {
+        setDownloadModal({ open: false, order: null });
+        
+        let title = "Excel Preview";
+        let filename = "document.xlsx";
+
+        if (optionId === 'material_excel') {
+          title = "Material List (Excel)";
+          filename = `MaterialList_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'process_excel') {
+          title = "Process Sheet (Excel)";
+          filename = `ProcessSheet_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'bop_excel') {
+          title = "BOP List (Excel)";
+          filename = `BOP_List_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'full_excel') {
+          title = "Full Quotation (Excel)";
+          filename = `Full_Quotation_${fullQuote.quotation_no}.xlsx`;
+        }
+
+        toast.dismiss("pdf-gen");
+        setExcelPreview({
+          open: true,
+          title,
+          filename,
+          optionId,
+          quotation: fullQuote,
+          hideDownload: isFromPreview
+        });
+        return;
+      }
+
+      // ─── PDF exports (with preview) ───
+      let projectImageUrl = null;
+      if (fullQuote.project_image) {
+        try {
+          const rawImg = fullQuote.project_image;
+          const parsedImage =
+            typeof rawImg === "string" ? JSON.parse(rawImg) : rawImg;
+          if (parsedImage && parsedImage.$id) {
+            projectImageUrl = assetService
+              .getFileView(parsedImage.$id)
+              ?.toString();
+          }
+        } catch (e) {
+          console.warn("Failed to parse project image:", e);
+        }
+      }
+
+      setDownloadModal({ open: false, order: null });
+
+      let doc;
+      let title = "PDF Preview";
+      let filename = "document.pdf";
+
+      if (optionId === "material") {
+        doc = await generateMaterialListPDF(fullQuote, { save: false });
+        title = "Material List";
+        filename = `MaterialList_${fullQuote.quotation_no}.pdf`;
+      } else if (optionId === "single") {
+        doc = await generateSinglePagePDF(fullQuote, projectImageUrl, {
+          save: false,
+        });
+        title = "Single Page Quotation";
+        const sanitizedClient = (fullQuote.supplier_name || "Client").replace(
+          /[/\\?%*:|"<>]/g,
+          "",
+        );
+        const sanitizedQtn = (fullQuote.quotation_no || "QTN").replace(
+          /[/\\?%*:|"<>]/g,
+          "",
+        );
+        const qtnDate = fullQuote.inquiry_date
+          ? new Date(fullQuote.inquiry_date)
+              .toLocaleDateString("en-GB")
+              .replace(/\//g, "-")
+          : new Date().toLocaleDateString("en-GB").replace(/\//g, "-");
+        filename = `${sanitizedClient} ${sanitizedQtn} ${qtnDate}.pdf`.trim();
+      } else if (optionId === "process") {
+        doc = await generateProcessSheetPDF(fullQuote, { save: false });
+        title = "Manufacturing Process Sheet";
+        filename = `ProcessSheet_${fullQuote.quotation_no}.pdf`;
+      } else if (optionId === "bop") {
+        doc = await generateBOPListPDF(fullQuote, { save: false });
+        title = "BOP Procurement List";
+        filename = `BOP_List_${fullQuote.quotation_no}.pdf`;
+      } else {
+        doc = await generateQuotationPDF(fullQuote, projectImageUrl, {
+          save: false,
+        });
+        title = "Full Technical Quotation";
+        filename = `Full_Quotation_${fullQuote.quotation_no}.pdf`;
+      }
+
+      toast.dismiss("pdf-gen");
+      setPdfPreview({ open: true, doc, title, filename });
+    } catch (err) {
+      toast.dismiss("pdf-gen");
+      toast.error("Export failed.");
+      console.error(err);
+    }
+  };
+
+  const handleExcelDownload = () => {
+    const { optionId, quotation, filename, data: exportData } = excelPreview;
+    if (!optionId) return;
+
+    toast.loading('Generating Excel export...', { id: 'excel-gen' });
+    
+    if (optionId === 'po_excel' && exportData) {
+      exportPurchaseOrdersToExcel(exportData, filename);
+    } else if (quotation) {
+      if (optionId === 'material_excel') {
+        exportMaterialListToExcel(quotation, filename);
+      } else if (optionId === 'process_excel') {
+        exportProcessSheetToExcel(quotation, filename);
+      } else if (optionId === 'bop_excel') {
+        exportBOPListToExcel(quotation, filename);
+      } else if (optionId === 'full_excel') {
+        exportFullQuotationToExcel(quotation, filename);
+      }
+    } else {
+      toast.dismiss('excel-gen');
+      toast.error('No data available for export.');
+      return;
+    }
+
+    toast.dismiss('excel-gen');
+    toast.success('Excel file downloaded successfully!');
   };
 
   const orders = data?.documents || [];
@@ -118,39 +306,49 @@ export default function ConfirmedOrdersPage() {
 
   const getDueBadge = (deliveryDate) => {
     if (!deliveryDate) return null;
-    const daysLeft = Math.ceil((new Date(deliveryDate) - new Date()) / 86400000);
-    if (daysLeft < 0) return { label: 'Overdue', cls: 'text-red-500 font-black' };
-    if (daysLeft <= 7) return { label: `${daysLeft}d left`, cls: 'text-amber-500 font-black' };
+    const daysLeft = Math.ceil(
+      (new Date(deliveryDate) - new Date()) / 86400000,
+    );
+    if (daysLeft < 0)
+      return { label: "Overdue", cls: "text-red-500 font-black" };
+    if (daysLeft <= 7)
+      return { label: `${daysLeft}d left`, cls: "text-amber-500 font-black" };
     return null;
   };
 
   const getStatusStyle = (status) => {
     switch (status) {
-      case 'In Production': return 'bg-blue-50 text-blue-600 border-blue-100';
-      case 'Completed': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-      case 'Cancelled': return 'bg-red-50 text-red-600 border-red-100';
-      case 'Shipped': return 'bg-purple-50 text-purple-600 border-purple-100';
-      default: return 'bg-amber-50 text-amber-600 border-amber-100';
+      case "In Production":
+        return "bg-blue-50 text-blue-600 border-blue-100";
+      case "Completed":
+        return "bg-emerald-50 text-emerald-600 border-emerald-100";
+      case "Cancelled":
+        return "bg-red-50 text-red-600 border-red-100";
+      case "Shipped":
+        return "bg-purple-50 text-purple-600 border-purple-100";
+      default:
+        return "bg-amber-50 text-amber-600 border-amber-100";
     }
   };
 
   return (
-    <DashboardLayout 
+    <DashboardLayout
       title="Confirmed Purchase Orders"
       primaryAction={
         <button
           onClick={handleExportExcel}
           disabled={isExporting || orders.length === 0}
           className="inline-flex h-9 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-white shadow-lg shadow-emerald-200/50 transition-all hover:bg-emerald-700 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed border border-emerald-500/20"
-          style={{ fontSize: THEME.FONT_SIZE.SMALL, fontWeight: 'bold' }}
+          style={{ fontSize: THEME.FONT_SIZE.SMALL, fontWeight: "bold" }}
         >
-          <FileSpreadsheet className={`h-3.5 w-3.5 ${isExporting ? 'animate-bounce' : ''}`} />
+          <FileSpreadsheet
+            className={`h-3.5 w-3.5 ${isExporting ? "animate-bounce" : ""}`}
+          />
           {isExporting ? "Exporting..." : "Export Orders"}
         </button>
       }
     >
       <div className="flex flex-col gap-6">
-
         {/* Metrics Bar */}
         <section className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="group relative overflow-hidden rounded-xl border border-zinc-200 bg-white p-3.5 shadow-sm">
@@ -159,7 +357,9 @@ export default function ConfirmedOrdersPage() {
                 <Briefcase className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">Total Orders</p>
+                <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest leading-none">
+                  Total Orders
+                </p>
                 <p className="mt-1 text-lg font-black text-zinc-950 tracking-tight leading-none">
                   {metricsLoading ? "..." : `${metrics?.count || 0}`}
                 </p>
@@ -173,9 +373,13 @@ export default function ConfirmedOrdersPage() {
                 <IndianRupee className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-[9px] font-bold text-blue-600/70 uppercase tracking-widest leading-none">This Month</p>
+                <p className="text-[9px] font-bold text-blue-600/70 uppercase tracking-widest leading-none">
+                  This Month
+                </p>
                 <p className="mt-1 text-lg font-black text-blue-950 tracking-tight leading-none">
-                  {metricsLoading ? "..." : `₹${(metrics?.currentMonthValue || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+                  {metricsLoading
+                    ? "..."
+                    : `₹${(metrics?.currentMonthValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`}
                 </p>
               </div>
             </div>
@@ -187,9 +391,13 @@ export default function ConfirmedOrdersPage() {
                 <Clock className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-[9px] font-bold text-amber-600/70 uppercase tracking-widest leading-none">Active Business</p>
+                <p className="text-[9px] font-bold text-amber-600/70 uppercase tracking-widest leading-none">
+                  Active Business
+                </p>
                 <p className="mt-1 text-lg font-black text-amber-950 tracking-tight leading-none">
-                  {metricsLoading ? "..." : `₹${(metrics?.activeValue || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+                  {metricsLoading
+                    ? "..."
+                    : `₹${(metrics?.activeValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`}
                 </p>
               </div>
             </div>
@@ -202,10 +410,14 @@ export default function ConfirmedOrdersPage() {
               </div>
               <div>
                 <p className="text-[9px] font-bold text-emerald-600/70 uppercase tracking-widest leading-none">
-                  {filters.dateRange.start ? filters.dateRange.label : 'All Time'}
+                  {filters.dateRange.start
+                    ? filters.dateRange.label
+                    : "All Time"}
                 </p>
                 <p className="mt-1 text-lg font-black text-emerald-950 tracking-tight leading-none">
-                  {metricsLoading ? "..." : `₹${(metrics?.selectedPeriodValue || 0).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`}
+                  {metricsLoading
+                    ? "..."
+                    : `₹${(metrics?.selectedPeriodValue || 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`}
                 </p>
               </div>
             </div>
@@ -215,11 +427,13 @@ export default function ConfirmedOrdersPage() {
         {/* Filters Section */}
         <section className="rounded-xl border border-zinc-200 bg-zinc-50/30 p-3.5 shadow-sm flex flex-col md:flex-row gap-4 items-end">
           <div className="flex-1 min-w-[200px] flex flex-col gap-1.5">
-            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.2em] px-1">Order / Customer Search</label>
+            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.2em] px-1">
+              Order / Customer Search
+            </label>
             <div className="relative group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
-              <input 
-                type="text" 
+              <input
+                type="text"
                 placeholder="Search PO#, Client..."
                 value={filters.search}
                 onChange={handleSearchChange}
@@ -229,8 +443,10 @@ export default function ConfirmedOrdersPage() {
           </div>
 
           <div className="flex-1 md:max-w-[160px] flex flex-col gap-1.5">
-            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.2em] px-1">Order Status</label>
-            <select 
+            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.2em] px-1">
+              Order Status
+            </label>
+            <select
               value={filters.status}
               onChange={handleStatusChange}
               className="w-full h-9.5 px-3 rounded-lg border border-zinc-200 bg-white text-[12px] font-bold focus:border-brand-primary outline-none appearance-none cursor-pointer"
@@ -243,36 +459,42 @@ export default function ConfirmedOrdersPage() {
               <option value="Cancelled">Cancelled</option>
             </select>
           </div>
-          
+
           <div className="flex-1 md:max-w-[180px] flex flex-col gap-1.5">
-            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.2em] px-1">Project Lead</label>
-            <select 
+            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.2em] px-1">
+              Project Lead
+            </label>
+            <select
               value={filters.engineer}
               onChange={handleEngineerChange}
               className="w-full h-9.5 px-3 rounded-lg border border-zinc-200 bg-white text-[12px] font-bold focus:border-brand-primary outline-none appearance-none cursor-pointer"
             >
               <option value="All">All Engineers</option>
-              {engineers.map(u => (
-                <option key={u.$id} value={u.name}>{u.name}</option>
+              {engineers.map((u) => (
+                <option key={u.$id} value={u.name}>
+                  {u.name}
+                </option>
               ))}
             </select>
           </div>
 
           <div className="flex-1 md:max-w-[200px] flex flex-col gap-1.5">
-            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.2em] px-1">Time Period</label>
-            <button 
+            <label className="text-[9px] font-black text-zinc-400 uppercase tracking-[0.2em] px-1">
+              Time Period
+            </label>
+            <button
               onClick={() => setShowDatePicker(true)}
               className="w-full h-9.5 pl-3 pr-8 rounded-lg border border-zinc-200 bg-white text-[12px] font-bold text-left focus:border-brand-primary outline-none relative"
             >
               {filters.dateRange.start
-                ? filters.dateRange.end && !isSameDay(filters.dateRange.start, filters.dateRange.end)
-                  ? `${format(filters.dateRange.start, 'MMM d')} – ${format(filters.dateRange.end, 'MMM d, y')}`
-                  : format(filters.dateRange.start, 'MMM d, y')
+                ? filters.dateRange.end &&
+                  !isSameDay(filters.dateRange.start, filters.dateRange.end)
+                  ? `${format(filters.dateRange.start, "MMM d")} – ${format(filters.dateRange.end, "MMM d, y")}`
+                  : format(filters.dateRange.start, "MMM d, y")
                 : "All Records"}
               <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-300" />
             </button>
           </div>
-
         </section>
 
         {/* Table Section */}
@@ -280,70 +502,143 @@ export default function ConfirmedOrdersPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm border-collapse">
               <thead className="bg-zinc-50 border-b border-zinc-100">
-                <tr style={{ fontSize: '10px' }}>
-                   <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em]">PO Reference</th>
-                   <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em]">Customer / Project</th>
-                   <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em]">Lead Engineer</th>
-                   <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em] text-center">PO Date</th>
-                   <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em] text-center">Delivery</th>
-                   <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em] text-center">Status</th>
-                   <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em] text-right">Order Value</th>
-                   <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em] text-right">Actions</th>
+                <tr style={{ fontSize: "10px" }}>
+                  <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em]">
+                    PO Reference
+                  </th>
+                  <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em]">
+                    Customer / Project
+                  </th>
+                  <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em]">
+                    Lead Engineer
+                  </th>
+                  <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em] text-center">
+                    PO Date
+                  </th>
+                  <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em] text-center">
+                    Delivery
+                  </th>
+                  <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em] text-center">
+                    Status
+                  </th>
+                  <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em] text-right">
+                    Order Value
+                  </th>
+                  <th className="px-6 py-4 font-black text-zinc-400 uppercase tracking-[0.2em] text-right">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-100">
                 {isLoading ? (
-                  [1,2,3,4,5].map(i => (
+                  [1, 2, 3, 4, 5].map((i) => (
                     <tr key={i} className="animate-pulse">
-                      <td colSpan="8" className="px-6 py-5 align-middle"><div className="h-5 w-full bg-zinc-50 rounded" /></td>
+                      <td colSpan="8" className="px-6 py-5 align-middle">
+                        <div className="h-5 w-full bg-zinc-50 rounded" />
+                      </td>
                     </tr>
                   ))
                 ) : orders.length === 0 ? (
                   <tr>
                     <td colSpan="8" className="px-6 py-24 text-center">
-                       <div className="flex flex-col items-center gap-3 text-zinc-400">
-                          <Briefcase className="h-10 w-10 text-zinc-200" />
-                          <p className="text-sm font-medium italic">No confirmed orders found matching your criteria.</p>
-                       </div>
+                      <div className="flex flex-col items-center gap-3 text-zinc-400">
+                        <Briefcase className="h-10 w-10 text-zinc-200" />
+                        <p className="text-sm font-medium italic">
+                          No confirmed orders found matching your criteria.
+                        </p>
+                      </div>
                     </td>
                   </tr>
                 ) : (
                   orders.map((order) => (
-                    <tr key={order.$id} className="group hover:bg-zinc-50 transition-all duration-200">
+                    <tr
+                      key={order.$id}
+                      className="group hover:bg-zinc-50 transition-all duration-200"
+                    >
                       <td className="px-6 py-4">
-                         <div className="flex flex-col">
-                            <span className="text-brand-primary font-black tracking-tight" style={{ fontSize: THEME.FONT_SIZE.SMALL }}>{order.po_number}</span>
-                            <span className="font-mono text-zinc-400 uppercase tracking-tighter" style={{ fontSize: '9px' }}>QTN: {order.quotation_no}</span>
-                         </div>
+                        <div className="flex flex-col">
+                          <span
+                            className="text-brand-primary font-black tracking-tight"
+                            style={{ fontSize: THEME.FONT_SIZE.SMALL }}
+                          >
+                            {order.po_number}
+                          </span>
+                          <span
+                            className="font-mono text-zinc-400 uppercase tracking-tighter"
+                            style={{ fontSize: "9px" }}
+                          >
+                            QTN: {order.quotation_no}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
-                         <div className="flex flex-col max-w-[220px]">
-                            <span className="font-bold text-zinc-800 truncate" style={{ fontSize: THEME.FONT_SIZE.SMALL }}>{order.customer_name}</span>
-                            <span className="text-zinc-500 font-medium truncate italic" style={{ fontSize: '11px' }}>{order.project_name}</span>
-                         </div>
+                        <div className="flex flex-col max-w-[220px]">
+                          <span
+                            className="font-bold text-zinc-800 truncate"
+                            style={{ fontSize: THEME.FONT_SIZE.SMALL }}
+                          >
+                            {order.customer_name}
+                          </span>
+                          <span
+                            className="text-zinc-500 font-medium truncate italic"
+                            style={{ fontSize: "11px" }}
+                          >
+                            {order.project_name}
+                          </span>
+                        </div>
                       </td>
                       <td className="px-6 py-4">
-                         <span className="text-zinc-500 font-semibold" style={{ fontSize: THEME.FONT_SIZE.SMALL }}>{order.engineer_name || '—'}</span>
+                        <span
+                          className="text-zinc-500 font-semibold"
+                          style={{ fontSize: THEME.FONT_SIZE.SMALL }}
+                        >
+                          {order.engineer_name || "—"}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 text-center font-bold font-mono text-zinc-400" style={{ fontSize: '10px' }}>
-                         {order.po_date ? new Date(order.po_date).toLocaleDateString('en-GB') : '—'}
+                      <td
+                        className="px-6 py-4 text-center font-bold font-mono text-zinc-400"
+                        style={{ fontSize: "10px" }}
+                      >
+                        {order.po_date
+                          ? new Date(order.po_date).toLocaleDateString("en-GB")
+                          : "—"}
                       </td>
-                      <td className="px-6 py-4 text-center" style={{ fontSize: '10px' }}>
+                      <td
+                        className="px-6 py-4 text-center"
+                        style={{ fontSize: "10px" }}
+                      >
                         {order.delivery_date ? (
                           <div className="flex flex-col items-center gap-0.5">
-                            <span className="font-bold font-mono text-zinc-400">{new Date(order.delivery_date).toLocaleDateString('en-GB')}</span>
-                            {(() => { const b = getDueBadge(order.delivery_date); return b ? <span className={`text-[9px] uppercase tracking-widest ${b.cls}`}>{b.label}</span> : null; })()}
+                            <span className="font-bold font-mono text-zinc-400">
+                              {new Date(order.delivery_date).toLocaleDateString(
+                                "en-GB",
+                              )}
+                            </span>
+                            {(() => {
+                              const b = getDueBadge(order.delivery_date);
+                              return b ? (
+                                <span
+                                  className={`text-[9px] uppercase tracking-widest ${b.cls}`}
+                                >
+                                  {b.label}
+                                </span>
+                              ) : null;
+                            })()}
                           </div>
-                        ) : <span className="text-zinc-300">—</span>}
+                        ) : (
+                          <span className="text-zinc-300">—</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-center">
                         <div className="relative inline-block">
-                          <select 
+                          <select
                             value={order.status}
                             disabled={updatingStatusId === order.$id}
-                            onChange={(e) => handleStatusUpdate(order.$id, e.target.value)}
-                            className={`inline-flex rounded-lg px-2 py-1 pr-6 font-black uppercase tracking-widest leading-none border appearance-none cursor-pointer outline-none transition-all ${getStatusStyle(order.status)} ${updatingStatusId === order.$id ? 'opacity-50 animate-pulse' : 'hover:scale-105 active:scale-95'}`}
-                            style={{ fontSize: '9px' }}
+                            onChange={(e) =>
+                              handleStatusUpdate(order.$id, e.target.value)
+                            }
+                            className={`inline-flex rounded-lg px-2 py-1 pr-6 font-black uppercase tracking-widest leading-none border appearance-none cursor-pointer outline-none transition-all ${getStatusStyle(order.status)} ${updatingStatusId === order.$id ? "opacity-50 animate-pulse" : "hover:scale-105 active:scale-95"}`}
+                            style={{ fontSize: "9px" }}
                           >
                             <option value="Received">Received</option>
                             <option value="In Production">In Production</option>
@@ -352,44 +647,91 @@ export default function ConfirmedOrdersPage() {
                             <option value="Cancelled">Cancelled</option>
                           </select>
                           <div className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-zinc-400">
-                             <Settings2 className="h-2.5 w-2.5" />
+                            <Settings2 className="h-2.5 w-2.5" />
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
-                         <div className="flex flex-col items-end">
-                            <span className="font-mono font-black text-emerald-900" style={{ fontSize: THEME.FONT_SIZE.BASE }}>
-                               ₹{parseFloat(order.actual_valuation || order.total_amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                            </span>
-                            {order.actual_valuation && Math.abs(order.actual_valuation - order.total_amount) > 0.01 && (
-                               <span className="text-[9px] font-bold text-zinc-400 line-through tracking-tighter decoration-emerald-500/30">
-                                  ₹{parseFloat(order.total_amount || 0).toLocaleString('en-IN')}
-                               </span>
+                        <div className="flex flex-col items-end">
+                          <span
+                            className="font-mono font-black text-emerald-900"
+                            style={{ fontSize: THEME.FONT_SIZE.BASE }}
+                          >
+                            ₹
+                            {parseFloat(
+                              order.actual_valuation || order.total_amount || 0,
+                            ).toLocaleString("en-IN", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </span>
+                          {order.actual_valuation &&
+                            Math.abs(
+                              order.actual_valuation - order.total_amount,
+                            ) > 0.01 && (
+                              <span className="text-[9px] font-bold text-zinc-400 line-through tracking-tighter decoration-emerald-500/30">
+                                ₹
+                                {parseFloat(
+                                  order.total_amount || 0,
+                                ).toLocaleString("en-IN")}
+                              </span>
                             )}
-                         </div>
+                        </div>
                       </td>
-                       <td className="px-6 py-4 text-right">
+                      <td className="px-6 py-4 text-right">
                         <div className="flex justify-end gap-2">
-                           {order.po_file_id && (
-                             <button
-                               onClick={() => setPreviewFile({
-                                 url: assetService.getFileView(order.po_file_id),
-                                 title: "Client Purchase Order",
-                                 filename: `PO_${order.po_number}.pdf`
-                               })}
-                               className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-zinc-100 text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all shadow-sm"
-                               title="View PO Document"
-                             >
-                                <FileText className="h-4 w-4" />
-                             </button>
-                           )}
-                           <button 
-                             onClick={() => setSelectedOrder(order)}
-                             className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-zinc-100 text-zinc-400 hover:text-brand-primary hover:bg-brand-primary/10 transition-all shadow-sm"
-                             title="View Details"
-                           >
-                              <ChevronRight className="h-4 w-4" />
-                           </button>
+                          <button
+                            onClick={() =>
+                              setPreviewSelect({ open: true, order: order })
+                            }
+                            className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-zinc-100 text-zinc-400 hover:text-brand-primary hover:bg-brand-primary/10 transition-all shadow-sm"
+                            title="Preview Quotation"
+                          >
+                            <svg
+                              className="h-4 w-4"
+                              fill="none"
+                              stroke="currentColor"
+                              viewBox="0 0 24 24"
+                            >
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2.5}
+                                d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                              />
+                              <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                strokeWidth={2.5}
+                                d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
+                              />
+                            </svg>
+                          </button>
+                          {order.po_file_id && (
+                            <button
+                              onClick={() =>
+                                setPreviewFile({
+                                  url: assetService.getFileView(
+                                    order.po_file_id,
+                                  ),
+                                  title: "Client Purchase Order",
+                                  filename: `PO_${order.po_number}.pdf`,
+                                })
+                              }
+                              className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-zinc-100 text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all shadow-sm"
+                              title="View PO Document"
+                            >
+                              <FileText className="h-4 w-4" />
+                            </button>
+                          )}
+                          <button
+                            onClick={() =>
+                              setDownloadModal({ open: true, order: order })
+                            }
+                            className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-zinc-100 text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all shadow-sm"
+                            title="Download PDF Reports"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -398,12 +740,18 @@ export default function ConfirmedOrdersPage() {
               </tbody>
             </table>
           </div>
-          <Pagination total={total} page={page} limit={limit} onPageChange={setPage} label="Orders" />
+          <Pagination
+            total={total}
+            page={page}
+            limit={limit}
+            onPageChange={setPage}
+            label="Orders"
+          />
         </section>
       </div>
 
       {showDatePicker && (
-        <DateRangePicker 
+        <DateRangePicker
           value={filters.dateRange}
           onChange={handleDateRangeChange}
           onClose={() => setShowDatePicker(false)}
@@ -421,13 +769,52 @@ export default function ConfirmedOrdersPage() {
         />
       )}
 
-      {selectedOrder && (
-        <OrderDetailsModal
-          isOpen={!!selectedOrder}
-          onClose={() => setSelectedOrder(null)}
-          order={selectedOrder}
-        />
-      )}
+      <DownloadOptionsModal
+        isOpen={downloadModal.open}
+        onClose={() => setDownloadModal({ open: false, order: null })}
+        onDownload={handleDownloadExecution}
+        quotationNo={downloadModal.order?.quotation_no}
+      />
+
+      <PreviewSelectModal 
+        isOpen={previewSelect.open}
+        onClose={() => setPreviewSelect({ open: false, order: null })}
+        quotationNo={previewSelect.order?.quotation_no || previewSelect.order?.po_number}
+        onSelectNormal={() => {
+          setPreviewQuotationId(previewSelect.order.quotation_id);
+          setPreviewSelect({ open: false, order: null });
+        }}
+        onSelectExcel={() => {
+          handleDownloadExecution('full_excel', previewSelect.order, true);
+          setPreviewSelect({ open: false, order: null });
+        }}
+      />
+
+      <QuotationPreviewModal
+        isOpen={!!previewQuotationId}
+        onClose={() => setPreviewQuotationId(null)}
+        quotationId={previewQuotationId}
+      />
+
+      <PdfPreviewModal
+        isOpen={pdfPreview.open}
+        onClose={() => setPdfPreview({ ...pdfPreview, open: false })}
+        pdfDoc={pdfPreview.doc}
+        title={pdfPreview.title}
+        filename={pdfPreview.filename}
+      />
+
+      <ExcelPreviewModal
+        isOpen={excelPreview.open}
+        onClose={() => setExcelPreview({ ...excelPreview, open: false })}
+        onDownload={handleExcelDownload}
+        title={excelPreview.title}
+        filename={excelPreview.filename}
+        quotation={excelPreview.quotation}
+        optionId={excelPreview.optionId}
+        data={excelPreview.data}
+        hideDownload={excelPreview.hideDownload}
+      />
     </DashboardLayout>
   );
 }
