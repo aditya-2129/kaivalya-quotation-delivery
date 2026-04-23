@@ -18,6 +18,7 @@ import PdfPreviewModal from '@/components/modals/PdfPreviewModal';
 import ExcelPreviewModal from '@/components/modals/ExcelPreviewModal';
 import Pagination from '@/components/ui/Pagination';
 import DateRangePicker from '@/components/ui/DateRangePicker';
+import PreviewSelectModal from '@/components/modals/PreviewSelectModal';
 import { generateQuotationPDF } from '@/utils/generateQuotationPDF';
 import { generateMaterialListPDF } from '@/utils/generateMaterialListPDF';
 import { generateSinglePagePDF } from '@/utils/generateSinglePagePDF';
@@ -51,6 +52,7 @@ export default function QuotationsPage() {
   };
 
   const [deleteConfirm, setDeleteConfirm] = useState({ open: false, row: null });
+  const [previewSelect, setPreviewSelect] = useState({ open: false, row: null });
   const [previewId, setPreviewId] = useState(null);
   const [downloadModal, setDownloadModal] = useState({ open: false, quotation: null });
   const [pdfPreview, setPdfPreview] = useState({ open: false, doc: null, title: '', filename: '' });
@@ -66,8 +68,8 @@ export default function QuotationsPage() {
   const quotations = data?.documents || [];
   const total = data?.total || 0;
 
-  const handleDownloadExecution = async (optionId) => {
-    const quotation = downloadModal.quotation;
+  const handleDownloadExecution = async (optionId, rowOverride, isFromPreview = false) => {
+    const quotation = rowOverride || downloadModal.quotation;
     if (!quotation) return;
 
     try {
@@ -99,7 +101,8 @@ export default function QuotationsPage() {
           title,
           filename,
           optionId,
-          quotation: fullQuote
+          quotation: fullQuote,
+          hideDownload: isFromPreview
         });
         return;
       }
@@ -317,7 +320,7 @@ export default function QuotationsPage() {
                       </td>
                        <td className="px-6 py-4 text-right">
                           <ActionButtons 
-                             onPreview={() => setPreviewId(row.$id)}
+                             onPreview={() => setPreviewSelect({ open: true, row: row })}
                              onDownload={() => setDownloadModal({ open: true, quotation: row })}
                              downloadDisabled={row.status === 'Draft'}
                              onEdit={() => router.push(`/quotations-draft/edit?id=${row.$id}`)} 
@@ -355,6 +358,20 @@ export default function QuotationsPage() {
         quotationId={previewId}
       />
 
+      <PreviewSelectModal 
+        isOpen={previewSelect.open}
+        onClose={() => setPreviewSelect({ open: false, row: null })}
+        quotationNo={previewSelect.row?.quotation_no || previewSelect.row?.$id?.substring(0,8)}
+        onSelectNormal={() => {
+          setPreviewId(previewSelect.row.$id);
+          setPreviewSelect({ open: false, row: null });
+        }}
+        onSelectExcel={() => {
+          handleDownloadExecution('full_excel', previewSelect.row, true);
+          setPreviewSelect({ open: false, row: null });
+        }}
+      />
+
       <DownloadOptionsModal 
         isOpen={downloadModal.open}
         onClose={() => setDownloadModal({ open: false, quotation: null })}
@@ -381,6 +398,7 @@ export default function QuotationsPage() {
         quotation={excelPreview.quotation}
         optionId={excelPreview.optionId}
         data={excelPreview.data}
+        hideDownload={excelPreview.hideDownload}
       />
 
       {showDatePicker && (

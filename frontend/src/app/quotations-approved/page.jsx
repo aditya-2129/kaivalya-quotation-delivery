@@ -14,6 +14,7 @@ import DownloadOptionsModal from '@/components/modals/DownloadOptionsModal';
 import PdfPreviewModal from '@/components/modals/PdfPreviewModal';
 import ExcelPreviewModal from '@/components/modals/ExcelPreviewModal';
 import Pagination from '@/components/ui/Pagination';
+import PreviewSelectModal from '@/components/modals/PreviewSelectModal';
 import { generateQuotationPDF } from '@/utils/generateQuotationPDF';
 import { generateMaterialListPDF } from '@/utils/generateMaterialListPDF';
 import { generateSinglePagePDF } from '@/utils/generateSinglePagePDF';
@@ -89,6 +90,7 @@ export default function ApprovedQuotationsPage() {
     setPage(1);
   };
 
+  const [previewSelect, setPreviewSelect] = useState({ open: false, row: null });
   const [previewId, setPreviewId] = useState(null);
   const [downloadModal, setDownloadModal] = useState({ open: false, quotation: null });
   const [pdfPreview, setPdfPreview] = useState({ open: false, doc: null, title: '', filename: '' });
@@ -108,8 +110,8 @@ export default function ApprovedQuotationsPage() {
   const quotations = data?.documents || [];
   const total = data?.total || 0;
 
-  const handleDownloadExecution = async (optionId) => {
-    const quotation = downloadModal.quotation;
+  const handleDownloadExecution = async (optionId, rowOverride, isFromPreview = false) => {
+    const quotation = rowOverride || downloadModal.quotation;
     if (!quotation) return;
 
     try {
@@ -141,7 +143,8 @@ export default function ApprovedQuotationsPage() {
           title,
           filename,
           optionId,
-          quotation: fullQuote
+          quotation: fullQuote,
+          hideDownload: isFromPreview
         });
         return;
       }
@@ -503,7 +506,7 @@ export default function ApprovedQuotationsPage() {
                          <div className="flex justify-end gap-2">
                            {/* Preview */}
                            <button 
-                               onClick={() => setPreviewId(row.$id)} 
+                               onClick={() => setPreviewSelect({ open: true, row: row })} 
                                className="h-9 w-9 inline-flex items-center justify-center rounded-xl border border-zinc-200 bg-white text-zinc-400 hover:text-brand-primary hover:border-brand-primary/30 transition-all shadow-sm active:scale-90"
                                title="Preview Protocol"
                            >
@@ -554,6 +557,20 @@ export default function ApprovedQuotationsPage() {
         quotationId={previewId}
       />
 
+      <PreviewSelectModal 
+        isOpen={previewSelect.open}
+        onClose={() => setPreviewSelect({ open: false, row: null })}
+        quotationNo={previewSelect.row?.quotation_no || previewSelect.row?.$id?.substring(0,8)}
+        onSelectNormal={() => {
+          setPreviewId(previewSelect.row.$id);
+          setPreviewSelect({ open: false, row: null });
+        }}
+        onSelectExcel={() => {
+          handleDownloadExecution('full_excel', previewSelect.row, true);
+          setPreviewSelect({ open: false, row: null });
+        }}
+      />
+
       <DownloadOptionsModal 
         isOpen={downloadModal.open}
         onClose={() => setDownloadModal({ open: false, quotation: null })}
@@ -578,6 +595,7 @@ export default function ApprovedQuotationsPage() {
         quotation={excelPreview.quotation}
         optionId={excelPreview.optionId}
         data={excelPreview.data}
+        hideDownload={excelPreview.hideDownload}
       />
 
       {showDatePicker && (

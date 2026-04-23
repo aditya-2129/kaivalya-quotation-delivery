@@ -39,6 +39,7 @@ import { generateSinglePagePDF } from "@/utils/generateSinglePagePDF";
 import { generateProcessSheetPDF } from "@/utils/generateProcessSheetPDF";
 import { generateBOPListPDF } from "@/utils/generateBOPListPDF";
 import { exportPurchaseOrdersToExcel, exportMaterialListToExcel, exportProcessSheetToExcel, exportBOPListToExcel, exportFullQuotationToExcel } from "@/utils/exportToExcel";
+import PreviewSelectModal from '@/components/modals/PreviewSelectModal';
 
 export default function ConfirmedOrdersPage() {
   const [page, setPage] = useState(1);
@@ -56,6 +57,7 @@ export default function ConfirmedOrdersPage() {
 
   // Modal states
   const [previewFile, setPreviewFile] = useState(null);
+  const [previewSelect, setPreviewSelect] = useState({ open: false, order: null });
   const [previewQuotationId, setPreviewQuotationId] = useState(null);
   const [downloadModal, setDownloadModal] = useState({
     open: false,
@@ -154,8 +156,8 @@ export default function ConfirmedOrdersPage() {
     }
   };
 
-  const handleDownloadExecution = async (optionId) => {
-    const order = downloadModal.order;
+  const handleDownloadExecution = async (optionId, rowOverride, isFromPreview = false) => {
+    const order = rowOverride || downloadModal.order;
     if (!order || !order.quotation_id) {
       toast.error("Associated quotation not found.");
       return;
@@ -194,7 +196,8 @@ export default function ConfirmedOrdersPage() {
           title,
           filename,
           optionId,
-          quotation: fullQuote
+          quotation: fullQuote,
+          hideDownload: isFromPreview
         });
         return;
       }
@@ -678,7 +681,7 @@ export default function ConfirmedOrdersPage() {
                         <div className="flex justify-end gap-2">
                           <button
                             onClick={() =>
-                              setPreviewQuotationId(order.quotation_id)
+                              setPreviewSelect({ open: true, order: order })
                             }
                             className="h-8 w-8 inline-flex items-center justify-center rounded-lg bg-zinc-100 text-zinc-400 hover:text-brand-primary hover:bg-brand-primary/10 transition-all shadow-sm"
                             title="Preview Quotation"
@@ -773,6 +776,20 @@ export default function ConfirmedOrdersPage() {
         quotationNo={downloadModal.order?.quotation_no}
       />
 
+      <PreviewSelectModal 
+        isOpen={previewSelect.open}
+        onClose={() => setPreviewSelect({ open: false, order: null })}
+        quotationNo={previewSelect.order?.quotation_no || previewSelect.order?.po_number}
+        onSelectNormal={() => {
+          setPreviewQuotationId(previewSelect.order.quotation_id);
+          setPreviewSelect({ open: false, order: null });
+        }}
+        onSelectExcel={() => {
+          handleDownloadExecution('full_excel', previewSelect.order, true);
+          setPreviewSelect({ open: false, order: null });
+        }}
+      />
+
       <QuotationPreviewModal
         isOpen={!!previewQuotationId}
         onClose={() => setPreviewQuotationId(null)}
@@ -796,6 +813,7 @@ export default function ConfirmedOrdersPage() {
         quotation={excelPreview.quotation}
         optionId={excelPreview.optionId}
         data={excelPreview.data}
+        hideDownload={excelPreview.hideDownload}
       />
     </DashboardLayout>
   );

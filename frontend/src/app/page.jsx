@@ -27,6 +27,10 @@ import {
 } from "@/features/dashboard/api/useDashboard";
 import QuotationPreviewModal from "@/components/modals/QuotationPreviewModal";
 import RejectionModal from "@/components/modals/RejectionModal";
+import PreviewSelectModal from "@/components/modals/PreviewSelectModal";
+import ExcelPreviewModal from "@/components/modals/ExcelPreviewModal";
+import { quotationService } from "@/services/quotations-draft";
+import { toast } from "react-hot-toast";
 
 // ── Helpers ──────────────────────────────────────────────
 function timeAgo(dateStr) {
@@ -239,6 +243,15 @@ export default function Home() {
   const router = useRouter();
   const { isAdmin, isLoading: authLoading } = useAuth();
   const [previewId, setPreviewId] = useState(null);
+  const [previewSelect, setPreviewSelect] = useState({ open: false, row: null });
+  const [excelPreview, setExcelPreview] = useState({
+    open: false,
+    title: "",
+    filename: "",
+    optionId: null,
+    quotation: null,
+    hideDownload: false
+  });
   const [rejectTarget, setRejectTarget] = useState(null);
 
   const { data: stats, isLoading: statsLoading } = useDashboardStats();
@@ -250,6 +263,26 @@ export default function Home() {
   useEffect(() => {
     if (!authLoading && !isAdmin) router.replace("/quotations-draft");
   }, [authLoading, isAdmin, router]);
+
+  const handleExcelPreview = async (row) => {
+    try {
+      toast.loading("Loading Excel preview...", { id: "excel-prev" });
+      const fullQuote = await quotationService.getQuotation(row.$id);
+      toast.dismiss("excel-prev");
+      setExcelPreview({
+        open: true,
+        title: "Full Quotation (Excel)",
+        filename: `Full_Quotation_${row.quotation_no}.xlsx`,
+        optionId: 'full_excel',
+        quotation: fullQuote,
+        hideDownload: true
+      });
+    } catch (err) {
+      toast.dismiss("excel-prev");
+      toast.error("Failed to load preview");
+      console.error(err);
+    }
+  };
 
   if (authLoading || !isAdmin) return null;
 
@@ -384,7 +417,7 @@ export default function Home() {
                       {formatCurrency(row.total_amount)}
                     </span>
                     <button
-                      onClick={() => setPreviewId(row.$id)}
+                      onClick={() => setPreviewSelect({ open: true, row: row })}
                       className="flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-50 px-2.5 py-1.5 font-semibold text-zinc-600 hover:bg-zinc-100 transition-colors shrink-0"
                       style={{ fontSize: "10px" }}
                     >
@@ -545,10 +578,34 @@ export default function Home() {
         </div>
       </div>
 
+      <PreviewSelectModal 
+        isOpen={previewSelect.open}
+        onClose={() => setPreviewSelect({ open: false, row: null })}
+        quotationNo={previewSelect.row?.quotation_no}
+        onSelectNormal={() => {
+          setPreviewId(previewSelect.row.$id);
+          setPreviewSelect({ open: false, row: null });
+        }}
+        onSelectExcel={() => {
+          handleExcelPreview(previewSelect.row);
+          setPreviewSelect({ open: false, row: null });
+        }}
+      />
+
       <QuotationPreviewModal
         isOpen={!!previewId}
         onClose={() => setPreviewId(null)}
         quotationId={previewId}
+      />
+
+      <ExcelPreviewModal
+        isOpen={excelPreview.open}
+        onClose={() => setExcelPreview({ ...excelPreview, open: false })}
+        title={excelPreview.title}
+        filename={excelPreview.filename}
+        quotation={excelPreview.quotation}
+        optionId={excelPreview.optionId}
+        hideDownload={excelPreview.hideDownload}
       />
 
       <RejectionModal

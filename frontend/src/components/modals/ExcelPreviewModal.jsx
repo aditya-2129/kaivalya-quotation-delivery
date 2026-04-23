@@ -22,7 +22,8 @@ const ExcelPreviewModal = ({
   filename = "document.xlsx",
   quotation,
   optionId,
-  data
+  data,
+  hideDownload = false
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -185,14 +186,18 @@ const ExcelPreviewModal = ({
             >
               {isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
             </button>
-            <button 
-              onClick={onDownload}
-              className="px-4 h-10 flex items-center gap-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all font-bold text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-200/50"
-            >
-              <Download className="h-4 w-4" />
-              Download .XLSX
-            </button>
-            <div className="w-px h-6 bg-zinc-200 mx-1" />
+            {hideDownload ? null : (
+              <>
+                <button 
+                  onClick={onDownload}
+                  className="px-4 h-10 flex items-center gap-2 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 transition-all font-bold text-[11px] uppercase tracking-widest shadow-lg shadow-emerald-200/50"
+                >
+                  <Download className="h-4 w-4" />
+                  Download .XLSX
+                </button>
+                <div className="w-px h-6 bg-zinc-200 mx-1" />
+              </>
+            )}
             <button 
               onClick={onClose}
               className="h-10 w-10 flex items-center justify-center rounded-xl bg-zinc-50 text-zinc-400 hover:text-red-500 hover:bg-red-50 transition-all"
