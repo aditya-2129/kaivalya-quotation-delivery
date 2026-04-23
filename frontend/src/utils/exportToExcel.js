@@ -1,4 +1,80 @@
 import * as XLSX from 'xlsx-js-style';
+import ExcelJS from 'exceljs';
+import { assetService } from '@/services/assets';
+import { toast } from 'react-hot-toast';
+
+async function downloadExcelWithImages(workbook, fileName) {
+  const loadingToast = toast.loading('Generating Excel file with images...');
+  try {
+    const wbBuffer = XLSX.write(workbook, { type: 'array', bookType: 'xlsx' });
+    const excelJsWb = new ExcelJS.Workbook();
+    await excelJsWb.xlsx.load(wbBuffer);
+    
+    for (const sheet of excelJsWb.worksheets) {
+      const imageCells = [];
+      sheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell, colNumber) => {
+          if (typeof cell.value === 'string' && cell.value.includes('[IMG:')) {
+            imageCells.push({ cell, rowNumber, colNumber });
+          }
+        });
+      });
+      
+      for (const { cell, rowNumber, colNumber } of imageCells) {
+        const match = cell.value.match(/\[IMG:([a-zA-Z0-9]+)\]/);
+        if (match) {
+          const imageId = match[1];
+          try {
+            const url = assetService.getFileView(imageId);
+            const proxyUrl = '/api/proxy-image?url=' + encodeURIComponent(url);
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error('Failed to fetch image via proxy');
+            const arrayBuffer = await response.arrayBuffer();
+            
+            const imageIndex = excelJsWb.addImage({
+              buffer: arrayBuffer,
+              extension: 'png',
+            });
+            
+            cell.value = '';
+            cell.border = {
+              bottom: { style: 'thin', color: { argb: 'FFCBD5E1' } },
+              left: { style: 'thin', color: { argb: 'FFF1F5F9' } },
+              right: { style: 'thin', color: { argb: 'FFF1F5F9' } }
+            };
+            const row = sheet.getRow(rowNumber);
+            row.height = 75; // Approx 100 pixels
+            
+            sheet.addImage(imageIndex, {
+              tl: { col: colNumber - 1 + 0.02, row: rowNumber - 1 + 0.05 },
+              ext: { width: 95, height: 95 },
+              editAs: 'oneCell'
+            });
+            
+          } catch (err) {
+            console.error('Error fetching image for Excel:', err);
+            cell.value = 'Image Error';
+          }
+        }
+      }
+    }
+    
+    const finalBuffer = await excelJsWb.xlsx.writeBuffer();
+    const blob = new Blob([finalBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    
+    toast.success('Excel downloaded successfully!', { id: loadingToast });
+  } catch (error) {
+    console.error('Excel export error:', error);
+    toast.error('Failed to generate Excel file. Downloading without images...', { id: loadingToast });
+    XLSX.writeFile(workbook, fileName);
+  }
+}
  
 /**
  * Exports an array of quotation data to an Excel file.
@@ -117,7 +193,7 @@ export const exportQuotationsToExcel = (data, fileName = 'Approved_Quotations.xl
 
   // Generate and download file
   if (returnWorkbook) return workbook;
-  XLSX.writeFile(workbook, fileName);
+  downloadExcelWithImages(workbook, fileName);
 };
 
 /**
@@ -243,7 +319,7 @@ export const exportPurchaseOrdersToExcel = (data, fileName = 'Confirmed_Orders.x
 
   // Generate and download file
   if (returnWorkbook) return workbook;
-  XLSX.writeFile(workbook, fileName);
+  downloadExcelWithImages(workbook, fileName);
 };
 
 // ─── HELPER: Add branded header block to a worksheet ───
@@ -367,7 +443,9 @@ function applyProfessionalStyling(worksheet, { numberCols = [], currencyCols = [
   for (let R = dataStartRow; R <= range.e.r; ++R) {
     for (let C = range.s.c; C <= range.e.c; ++C) {
       const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
-      if (!worksheet[cellAddress]) continue;
+      if (!worksheet[cellAddress]) {
+        worksheet[cellAddress] = { t: 's', v: '' };
+      }
 
       const isHeader = R === dataStartRow;
       const isTotalRow = R === range.e.r;
@@ -395,7 +473,11 @@ function applyProfessionalStyling(worksheet, { numberCols = [], currencyCols = [
         };
       } else {
         if (isEvenRow) fillStyle = { fgColor: { rgb: "F8FAFC" } };
-        borderStyle = { bottom: { style: "thin", color: { rgb: "E2E8F0" } } };
+        borderStyle = { 
+          bottom: { style: "thin", color: { rgb: "E2E8F0" } },
+          left: { style: "thin", color: { rgb: "F1F5F9" } },
+          right: { style: "thin", color: { rgb: "F1F5F9" } }
+        };
       }
 
       // Currency format
@@ -452,11 +534,24 @@ export const exportMaterialListToExcel = (quote, fileName, returnWorkbook = fals
     const qty = item.qty || 1;
     const rate = parseFloat(item.material.base_rate || item.material.rate || 0);
 
+    const allows = item.allowances || {};
+    const parseNum = (v) => parseFloat(v) || 0;
+    let rawDimStr = '—';
+    if (item.shape === 'rect') {
+      rawDimStr = `${r2(parseNum(dims.l) + parseNum(allows.l))}x${r2(parseNum(dims.w) + parseNum(allows.w))}x${r2(parseNum(dims.t) + parseNum(allows.t))}`;
+    } else if (item.shape === 'round') {
+      rawDimStr = `Dia ${r2(parseNum(dims.dia) + parseNum(allows.dia))} x ${r2(parseNum(dims.l) + parseNum(allows.l))}`;
+    } else if (item.shape === 'hex') {
+      rawDimStr = `AF ${r2(parseNum(dims.af) + parseNum(allows.af))} x ${r2(parseNum(dims.l) + parseNum(allows.l))}`;
+    }
+
     return {
       'Sr.': index + 1,
+      'Part Image': item.part_image?.$id ? `[IMG:${item.part_image.$id}]` : '—',
       'Part Name': item.part_name || '—',
       'Material / Grade': item.material.grade || '—',
       'Dimensions (mm)': dimStr,
+      'Raw Dimensions (mm)': rawDimStr,
       'Qty': qty,
       'Unit Weight (kg)': Math.round(unitWt * 100) / 100,
       'Total Weight (kg)': Math.round(unitWt * qty * 100) / 100,
@@ -470,9 +565,11 @@ export const exportMaterialListToExcel = (quote, fileName, returnWorkbook = fals
   const totalAmt = rows.reduce((sum, r) => sum + r['Amount (₹)'], 0);
   rows.push({
     'Sr.': 'TOTAL',
+    'Part Image': '',
     'Part Name': '',
     'Material / Grade': '',
     'Dimensions (mm)': '',
+    'Raw Dimensions (mm)': '',
     'Qty': '',
     'Unit Weight (kg)': '',
     'Total Weight (kg)': Math.round(totalWt * 100) / 100,
@@ -487,18 +584,29 @@ export const exportMaterialListToExcel = (quote, fileName, returnWorkbook = fals
     docLabel: 'MATERIAL LIST',
     qtnNo: quote.quotation_no,
     sectionTitle: 'SECTION 01: RAW MATERIAL SPECIFICATIONS',
-    colCount: 9
+    colCount: 11
   });
 
-  // Currency cols: Rate(7), Amount(8)  |  Number cols: Qty(4), Unit Wt(5), Total Wt(6)
-  applyProfessionalStyling(worksheet, { numberCols: [4, 5, 6], currencyCols: [7, 8], dataStartRow: headerOffset });
+  // Currency cols: Rate(8), Amount(9)  |  Number cols: Qty(5), Unit Wt(6), Total Wt(7)
+  applyProfessionalStyling(worksheet, { numberCols: [5, 6, 7], currencyCols: [8, 9], dataStartRow: headerOffset });
+
+  // Set row heights for preview
+  const rowHeights = [];
+  for (let i = 0; i < headerOffset; i++) rowHeights.push({ hpt: i === 0 ? 30 : 18 });
+  rowHeights.push({ hpt: 32 }); // Column headers
+  rows.forEach(r => {
+    rowHeights.push({ hpt: (r['Part Image'] && r['Part Image'].includes('[IMG:')) ? 75 : 22 });
+  });
+  worksheet['!rows'] = rowHeights;
 
   // Column widths
   worksheet['!cols'] = [
     { wch: 6 },   // Sr.
+    { wch: 15 },   // Part Image (Set to approx 50px)
     { wch: 22 },  // Part Name
     { wch: 20 },  // Material
     { wch: 22 },  // Dimensions
+    { wch: 22 },  // Raw Dimensions
     { wch: 8 },   // Qty
     { wch: 16 },  // Unit Weight
     { wch: 16 },  // Total Weight
@@ -509,7 +617,7 @@ export const exportMaterialListToExcel = (quote, fileName, returnWorkbook = fals
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Material List');
   if (returnWorkbook) return workbook;
-  XLSX.writeFile(workbook, fileName);
+  downloadExcelWithImages(workbook, fileName);
 };
 
 
@@ -545,6 +653,7 @@ export const exportProcessSheetToExcel = (quote, fileName, returnWorkbook = fals
 
         rows.push({
           'Sr.': pIdx === 0 ? index + 1 : '',
+          'Part Image': (pIdx === 0 && item.part_image?.$id) ? `[IMG:${item.part_image.$id}]` : '',
           'Part Name': pIdx === 0 ? (item.part_name || '—') : '',
           'Operation': p.process_name || '—',
           'Setup (min)': Math.round(setup * 100) / 100,
@@ -560,6 +669,7 @@ export const exportProcessSheetToExcel = (quote, fileName, returnWorkbook = fals
   const totalAmt = rows.reduce((sum, r) => sum + (typeof r['Amount (₹)'] === 'number' ? r['Amount (₹)'] : 0), 0);
   rows.push({
     'Sr.': 'TOTAL',
+    'Part Image': '',
     'Part Name': '',
     'Operation': '',
     'Setup (min)': '',
@@ -578,13 +688,23 @@ export const exportProcessSheetToExcel = (quote, fileName, returnWorkbook = fals
     docLabel: 'PROCESS SHEET',
     qtnNo: quote.quotation_no,
     sectionTitle: 'SECTION 02: MANUFACTURING PROCESS SHEET',
-    colCount: 7
+    colCount: 8
   });
 
   applyProfessionalStyling(worksheet, { numberCols: [3, 4], currencyCols: [6], dataStartRow: headerOffset });
 
+  // Set row heights for preview
+  const rowHeights = [];
+  for (let i = 0; i < headerOffset; i++) rowHeights.push({ hpt: i === 0 ? 30 : 18 });
+  rowHeights.push({ hpt: 32 }); // Column headers
+  rows.forEach(r => {
+    rowHeights.push({ hpt: (r['Part Image'] && r['Part Image'].includes('[IMG:')) ? 75 : 22 });
+  });
+  worksheet['!rows'] = rowHeights;
+
   worksheet['!cols'] = [
     { wch: 6 },   // Sr.
+    { wch: 15 },  // Part Image (Standardized width)
     { wch: 22 },  // Part Name
     { wch: 24 },  // Operation
     { wch: 14 },  // Setup
@@ -596,7 +716,7 @@ export const exportProcessSheetToExcel = (quote, fileName, returnWorkbook = fals
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Process Sheet');
   if (returnWorkbook) return workbook;
-  XLSX.writeFile(workbook, fileName);
+  downloadExcelWithImages(workbook, fileName);
 };
 
 
@@ -665,7 +785,7 @@ export const exportBOPListToExcel = (quote, fileName, returnWorkbook = false) =>
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'BOP List');
   if (returnWorkbook) return workbook;
-  XLSX.writeFile(workbook, fileName);
+  downloadExcelWithImages(workbook, fileName);
 };
 
 // ─── FULL QUOTATION (Multi-Sheet Workbook) ───
@@ -858,11 +978,24 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
     const qty = item.qty || 1;
     const rate = parseFloat(item.material.base_rate || item.material.rate || 0);
 
+    const allows = item.allowances || {};
+    const parseNum = (v) => parseFloat(v) || 0;
+    let rawDimStr = '—';
+    if (item.shape === 'rect') {
+      rawDimStr = `${r2(parseNum(dims.l) + parseNum(allows.l))}x${r2(parseNum(dims.w) + parseNum(allows.w))}x${r2(parseNum(dims.t) + parseNum(allows.t))}`;
+    } else if (item.shape === 'round') {
+      rawDimStr = `Dia ${r2(parseNum(dims.dia) + parseNum(allows.dia))} x ${r2(parseNum(dims.l) + parseNum(allows.l))}`;
+    } else if (item.shape === 'hex') {
+      rawDimStr = `AF ${r2(parseNum(dims.af) + parseNum(allows.af))} x ${r2(parseNum(dims.l) + parseNum(allows.l))}`;
+    }
+
     return {
       'Sr.': index + 1,
+      'Part Image': item.part_image?.$id ? `[IMG:${item.part_image.$id}]` : '—',
       'Part Name': item.part_name || '—',
       'Material': item.material.grade || '—',
       'Dimensions (mm)': dimStr,
+      'Raw Dimensions (mm)': rawDimStr,
       'Qty': qty,
       'Unit Wt (kg)': r2(unitWt),
       'Total Wt (kg)': r2(unitWt * qty),
@@ -873,8 +1006,8 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
 
   const matTotal = matRows.reduce((s, r) => s + r['Amount (₹)'], 0);
   matRows.push({
-    'Sr.': 'TOTAL', 'Part Name': '', 'Material': '', 'Dimensions (mm)': '',
-    'Qty': '', 'Unit Wt (kg)': '', 'Total Wt (kg)': '', 'Rate (₹/kg)': '',
+    'Sr.': 'TOTAL', 'Part Image': '', 'Part Name': '', 'Material': '', 'Dimensions (mm)': '',
+    'Raw Dimensions (mm)': '', 'Qty': '', 'Unit Wt (kg)': '', 'Total Wt (kg)': '', 'Rate (₹/kg)': '',
     'Amount (₹)': r2(matTotal)
   });
 
@@ -883,11 +1016,20 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
     docLabel: 'MATERIAL LIST',
     qtnNo: quote.quotation_no,
     sectionTitle: 'SECTION 01: RAW MATERIAL SPECIFICATIONS',
-    colCount: 9
+    colCount: 11
   });
-  applyProfessionalStyling(matWS, { numberCols: [4], currencyCols: [5, 6, 7, 8], dataStartRow: matHeaderOffset });
+  applyProfessionalStyling(matWS, { numberCols: [5, 6, 7], currencyCols: [8, 9], dataStartRow: matHeaderOffset });
+
+  // Set row heights for preview
+  const matRowHeights = [];
+  for (let i = 0; i < matHeaderOffset; i++) matRowHeights.push({ hpt: i === 0 ? 30 : 18 });
+  matRowHeights.push({ hpt: 32 }); // Column headers
+  matRows.forEach(r => {
+    matRowHeights.push({ hpt: (r['Part Image'] && r['Part Image'].includes('[IMG:')) ? 75 : 22 });
+  });
+  matWS['!rows'] = matRowHeights;
   matWS['!cols'] = [
-    { wch: 6 }, { wch: 24 }, { wch: 18 }, { wch: 22 },
+    { wch: 6 }, { wch: 15 }, { wch: 24 }, { wch: 18 }, { wch: 22 }, { wch: 22 },
     { wch: 6 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 16 }
   ];
   XLSX.utils.book_append_sheet(workbook, matWS, 'Material List');
@@ -919,6 +1061,7 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
         }
         procRows.push({
           'Sr.': pIdx === 0 ? index + 1 : '',
+          'Part Image': (pIdx === 0 && item.part_image?.$id) ? `[IMG:${item.part_image.$id}]` : '',
           'Part Name': pIdx === 0 ? item.part_name || '—' : '',
           'Operation': p.process_name || '—',
           'Setup (min)': r2(setup),
@@ -932,7 +1075,7 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
 
   const procTotal = procRows.reduce((s, r) => s + (typeof r['Amount (₹)'] === 'number' ? r['Amount (₹)'] : 0), 0);
   procRows.push({
-    'Sr.': 'TOTAL', 'Part Name': '', 'Operation': '',
+    'Sr.': 'TOTAL', 'Part Image': '', 'Part Name': '', 'Operation': '',
     'Setup (min)': '', 'Cycle (min)': '', 'Rate': '',
     'Amount (₹)': r2(procTotal)
   });
@@ -942,11 +1085,20 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
     docLabel: 'PROCESS SHEET',
     qtnNo: quote.quotation_no,
     sectionTitle: 'SECTION 02: MANUFACTURING PROCESS SHEET',
-    colCount: 7
+    colCount: 8
   });
   applyProfessionalStyling(procWS, { numberCols: [3, 4], currencyCols: [6], dataStartRow: procHeaderOffset });
+
+  // Set row heights for preview
+  const procRowHeights = [];
+  for (let i = 0; i < procHeaderOffset; i++) procRowHeights.push({ hpt: i === 0 ? 30 : 18 });
+  procRowHeights.push({ hpt: 32 }); // Column headers
+  procRows.forEach(r => {
+    procRowHeights.push({ hpt: (r['Part Image'] && r['Part Image'].includes('[IMG:')) ? 75 : 22 });
+  });
+  procWS['!rows'] = procRowHeights;
   procWS['!cols'] = [
-    { wch: 6 }, { wch: 24 }, { wch: 24 },
+    { wch: 6 }, { wch: 15 }, { wch: 24 }, { wch: 24 },
     { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }
   ];
   XLSX.utils.book_append_sheet(workbook, procWS, 'Process Sheet');
@@ -993,7 +1145,7 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
   // WRITE FILE
   // ────────────────────────────────────────────────
   if (returnWorkbook) return workbook;
-  XLSX.writeFile(workbook, fileName);
+  downloadExcelWithImages(workbook, fileName);
 };
 
 // ─── Utility: Round to 2 decimal places ───

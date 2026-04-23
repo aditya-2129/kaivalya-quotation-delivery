@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import AssetPreviewModal from '@/components/modals/AssetPreviewModal';
 import { FeaturePanel } from '@/components/ui/FeaturePanel';
 import { useAssets } from '@/hooks/useAssets';
@@ -22,6 +22,8 @@ const BOMRegistry = ({
   const [previewFile, setPreviewFile] = useState(null);
   const [imageErrors, setImageErrors] = useState({});
   const [uploadingItems, setUploadingItems] = useState(new Set());
+  const [dragActiveImage, setDragActiveImage] = useState(null);
+  const [dragActiveDrawing, setDragActiveDrawing] = useState(null);
   const { uploadFile, uploadFiles, deleteFile, getPreviewUrl } = useAssets();
 
   const setItemUploading = (itemId, val) =>
@@ -54,7 +56,7 @@ const BOMRegistry = ({
         ...prev.items,
         {
           id: Date.now(),
-          part_name: `Part ${String(prev.items.length + 1).padStart(2, '0')}`,
+          part_name: '',
           qty: 1,
           processes: [],
           bought_out_items: [],
@@ -160,7 +162,36 @@ const BOMRegistry = ({
                   </span>
                 </td>
                 <td className="px-3 py-2">
-                  <div className="flex items-center gap-4">
+                  <div 
+                    className={`flex items-center gap-4 p-1 rounded-xl transition-all ${dragActiveImage === item.id ? 'bg-brand-primary/5 shadow-inner' : ''}`}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragActiveImage(item.id); }}
+                    onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragActiveImage(null); }}
+                    onDrop={async (e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setDragActiveImage(null);
+                      const file = e.dataTransfer.files?.[0];
+                      if (!file) return;
+                      if (!file.type.startsWith('image/')) {
+                        onError?.('Please upload an image file.');
+                        return;
+                      }
+                      setItemUploading(item.id, true);
+                      try {
+                        const uploadedFile = await uploadFile(file);
+                        updateItem(idx, {
+                          part_image: {
+                            ...uploadedFile,
+                            localPreview: URL.createObjectURL(file),
+                          },
+                        });
+                      } catch (err) {
+                        onError?.('Failed to upload part snapshot. ' + err.message);
+                      } finally {
+                        setItemUploading(item.id, false);
+                      }
+                    }}
+                  >
                     <input
                       type="file"
                       id={`part-image-${item.id}`}
@@ -214,7 +245,11 @@ const BOMRegistry = ({
                     ) : (
                       <label
                         htmlFor={`part-image-${item.id}`}
-                        className="relative h-14 w-14 rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 flex flex-col items-center justify-center gap-0.5 text-zinc-300 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-all cursor-pointer group/upload overflow-hidden flex-shrink-0"
+                        className={`relative h-14 w-14 rounded-xl border-2 flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer group/upload overflow-hidden flex-shrink-0 ${
+                          dragActiveImage === item.id 
+                            ? 'border-brand-primary border-solid bg-brand-primary/10 text-brand-primary scale-105' 
+                            : 'border-zinc-200 border-dashed bg-zinc-50/50 text-zinc-300 hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5'
+                        }`}
                       >
                         {uploadingItems.has(item.id) && (
                           <div className="absolute inset-0 bg-white/90 z-10 flex flex-col items-center justify-center">
@@ -248,13 +283,43 @@ const BOMRegistry = ({
                     onChange={(e) => updateItem(idx, { qty: parseInt(e.target.value) || 1 })}
                   />
                 </td>
-                <td className="px-4 py-3 max-w-[320px]">
+                <td 
+                  className={`px-4 py-3 max-w-[320px] transition-all rounded-xl ${
+                    dragActiveDrawing === item.id 
+                      ? 'bg-brand-primary/10 ring-2 ring-brand-primary ring-inset shadow-inner' 
+                      : ''
+                  }`}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragActiveDrawing(item.id); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragActiveDrawing(null); }}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDragActiveDrawing(null);
+                    const selectedFiles = Array.from(e.dataTransfer.files || []);
+                    if (selectedFiles.length === 0) return;
+                    setItemUploading(item.id, true);
+                    try {
+                      const uploadedFiles = await uploadFiles(selectedFiles);
+                      const updates = {
+                        design_files: [...(item.design_files || []), ...uploadedFiles],
+                      };
+                      const sldFile = selectedFiles.find(f => f.name.toLowerCase().endsWith('.sldprt') || f.name.toLowerCase().endsWith('.sldasm'));
+                      if (sldFile && !item.part_name?.trim()) {
+                        updates.part_name = sldFile.name.replace(/\.(sldprt|sldasm)$/i, '');
+                      }
+                      updateItem(idx, updates);
+                    } catch (err) {
+                      onError?.('Failed to upload assets. ' + err.message);
+                    } finally {
+                      setItemUploading(item.id, false);
+                    }
+                  }}
+                >
                   <input
                     type="file"
                     id={`drawing-${item.id}`}
                     className="hidden"
                     multiple
-                    accept=".pdf,.stp,.step,.dwg,.dxf"
                     disabled={uploadingItems.has(item.id)}
                     onChange={async (e) => {
                       const selectedFiles = Array.from(e.target.files || []);
@@ -262,9 +327,14 @@ const BOMRegistry = ({
                       setItemUploading(item.id, true);
                       try {
                         const uploadedFiles = await uploadFiles(selectedFiles);
-                        updateItem(idx, {
+                        const updates = {
                           design_files: [...(item.design_files || []), ...uploadedFiles],
-                        });
+                        };
+                        const sldFile = selectedFiles.find(f => f.name.toLowerCase().endsWith('.sldprt') || f.name.toLowerCase().endsWith('.sldasm'));
+                        if (sldFile && !item.part_name?.trim()) {
+                          updates.part_name = sldFile.name.replace(/\.(sldprt|sldasm)$/i, '');
+                        }
+                        updateItem(idx, updates);
                       } catch (err) {
                         onError?.('Failed to upload assets. ' + err.message);
                       } finally {
@@ -275,9 +345,7 @@ const BOMRegistry = ({
                   />
                   <div className="flex flex-col gap-1">
                     {item.design_files?.map((file, fIdx) => {
-                      const isCAD = ['.stp', '.step', '.dwg', '.dxf'].some((ext) =>
-                        file.name?.toLowerCase().endsWith(ext)
-                      );
+                      const isPDF = file.name?.toLowerCase().endsWith('.pdf');
                       const baseName = file.name?.replace(/\.[^/.]+$/, '') ?? '';
                       const ext = file.name?.split('.').pop()?.toUpperCase() ?? '';
                       return (
@@ -285,22 +353,22 @@ const BOMRegistry = ({
                           <div
                             onClick={() => setPreviewFile(file)}
                             className={`flex items-center gap-1.5 px-2 py-1 rounded-md border transition-all cursor-pointer active:scale-95 ${
-                              isCAD
+                              !isPDF
                                 ? 'bg-cyan-50 border-cyan-200 hover:border-cyan-400'
                                 : 'bg-red-50 border-red-200 hover:border-red-400'
                             }`}
                           >
-                            {isCAD ? (
+                            {!isPDF ? (
                               <svg className="h-3 w-3 text-cyan-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                               </svg>
                             ) : (
                               <FileText className="h-3 w-3 text-red-500 flex-shrink-0" />
                             )}
-                            <span className={`text-[9px] font-bold uppercase tracking-tight truncate flex-1 min-w-0 ${isCAD ? 'text-cyan-800' : 'text-red-800'}`}>
+                            <span className={`text-[9px] font-bold uppercase tracking-tight truncate flex-1 min-w-0 ${!isPDF ? 'text-cyan-800' : 'text-red-800'}`}>
                               {baseName}
                             </span>
-                            <span className={`text-[8px] font-black uppercase opacity-50 flex-shrink-0 ${isCAD ? 'text-cyan-700' : 'text-red-700'}`}>
+                            <span className={`text-[8px] font-black uppercase opacity-50 flex-shrink-0 ${!isPDF ? 'text-cyan-700' : 'text-red-700'}`}>
                               .{ext}
                             </span>
                           </div>
@@ -327,7 +395,7 @@ const BOMRegistry = ({
                     ) : (
                       <label
                         htmlFor={`drawing-${item.id}`}
-                        className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-dashed border-zinc-200 text-zinc-400 bg-transparent hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5 transition-all cursor-pointer w-fit"
+                        className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-dashed transition-all cursor-pointer w-fit ${dragActiveDrawing === item.id ? 'border-brand-primary text-brand-primary bg-brand-primary/10 scale-105' : 'border-zinc-200 text-zinc-400 bg-transparent hover:border-brand-primary hover:text-brand-primary hover:bg-brand-primary/5'}`}
                         title="Attach files"
                       >
                         <Plus className="h-3 w-3" />

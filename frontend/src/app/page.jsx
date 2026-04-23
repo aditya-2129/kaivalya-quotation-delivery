@@ -100,7 +100,7 @@ function RevenueBanner({ stats, loading }) {
       <div className="flex items-center gap-6 flex-wrap">
         {/* Revenue */}
         <div className="flex-1 min-w-[160px]">
-          <p className="font-bold uppercase tracking-widest text-slate-400" style={{ fontSize: "10px" }}>
+          <p className="font-bold uppercase tracking-widest text-white/90" style={{ fontSize: "10px" }}>
             Total Revenue
           </p>
           {loading ? (
@@ -123,45 +123,45 @@ function RevenueBanner({ stats, loading }) {
         <div className="w-px h-12 bg-white/10 hidden sm:block" />
 
         {/* Active Quotations */}
-        <div className="text-center min-w-[80px]">
-          <p className="font-bold uppercase tracking-widest text-slate-500" style={{ fontSize: "9px" }}>Active</p>
-          {loading ? <Pulse className="mt-1 h-7 w-10 mx-auto" /> : (
-            <p className="mt-1 font-black text-white" style={{ fontSize: "22px" }}>{stats?.totalQuotations ?? "—"}</p>
+        <div className="text-center min-w-[90px]">
+          <p className="font-bold uppercase tracking-widest text-white/80" style={{ fontSize: "10px" }}>Active</p>
+          {loading ? <Pulse className="mt-1.5 h-7 w-12 mx-auto" /> : (
+            <p className="mt-1 font-black text-white" style={{ fontSize: "24px" }}>{stats?.totalQuotations ?? "—"}</p>
           )}
-          <p className="text-slate-500 font-medium" style={{ fontSize: "9px" }}>quotations</p>
+          <p className="text-white/60 font-bold uppercase tracking-wide" style={{ fontSize: "10px" }}>quotations</p>
         </div>
 
         <div className="w-px h-12 bg-white/10 hidden sm:block" />
 
         {/* Awaiting Approval */}
-        <div className="text-center min-w-[80px]">
-          <p className="font-bold uppercase tracking-widest text-amber-500/80" style={{ fontSize: "9px" }}>⚡ Awaiting</p>
-          {loading ? <Pulse className="mt-1 h-7 w-10 mx-auto" /> : (
-            <p className="mt-1 font-black text-brand-accent" style={{ fontSize: "22px" }}>{stats?.completedCount ?? "—"}</p>
+        <div className="text-center min-w-[90px]">
+          <p className="font-bold uppercase tracking-widest text-white/80" style={{ fontSize: "10px" }}><span className="text-amber-400">⚡</span> Awaiting</p>
+          {loading ? <Pulse className="mt-1.5 h-7 w-12 mx-auto" /> : (
+            <p className="mt-1 font-black text-brand-accent" style={{ fontSize: "24px" }}>{stats?.completedCount ?? "—"}</p>
           )}
-          <p className="text-slate-400 font-bold" style={{ fontSize: "9px" }}>APPROVAL</p>
+          <p className="text-white/60 font-bold uppercase tracking-wide" style={{ fontSize: "10px" }}>APPROVAL</p>
         </div>
 
         <div className="w-px h-12 bg-white/10 hidden sm:block" />
 
         {/* POs Logged */}
-        <div className="text-center min-w-[80px]">
-          <p className="font-bold uppercase tracking-widest text-slate-500" style={{ fontSize: "9px" }}>POs Logged</p>
-          {loading ? <Pulse className="mt-1 h-7 w-10 mx-auto" /> : (
-            <p className="mt-1 font-black text-[#a78bfa]" style={{ fontSize: "22px" }}>{stats?.poCount ?? "—"}</p>
+        <div className="text-center min-w-[90px]">
+          <p className="font-bold uppercase tracking-widest text-white/80" style={{ fontSize: "10px" }}>POs Logged</p>
+          {loading ? <Pulse className="mt-1.5 h-7 w-12 mx-auto" /> : (
+            <p className="mt-1 font-black text-[#a78bfa]" style={{ fontSize: "24px" }}>{stats?.poCount ?? "—"}</p>
           )}
-          <p className="text-slate-500 font-medium" style={{ fontSize: "9px" }}>total</p>
+          <p className="text-white/60 font-bold uppercase tracking-wide" style={{ fontSize: "10px" }}>total</p>
         </div>
 
         <div className="w-px h-12 bg-white/10 hidden sm:block" />
 
         {/* Conversion Rate */}
-        <div className="text-center min-w-[80px]">
-          <p className="font-bold uppercase tracking-widest text-slate-500" style={{ fontSize: "9px" }}>Conversion</p>
-          {loading ? <Pulse className="mt-1 h-7 w-10 mx-auto" /> : (
-            <p className="mt-1 font-black text-emerald-400" style={{ fontSize: "22px" }}>{conversionRate}%</p>
+        <div className="text-center min-w-[90px]">
+          <p className="font-bold uppercase tracking-widest text-white/80" style={{ fontSize: "10px" }}>Conversion</p>
+          {loading ? <Pulse className="mt-1.5 h-7 w-12 mx-auto" /> : (
+            <p className="mt-1 font-black text-emerald-400" style={{ fontSize: "24px" }}>{conversionRate}%</p>
           )}
-          <p className="text-slate-500 font-medium" style={{ fontSize: "9px" }}>quotes → PO</p>
+          <p className="text-white/60 font-bold uppercase tracking-wide" style={{ fontSize: "10px" }}>quotes → PO</p>
         </div>
       </div>
     </div>
@@ -498,8 +498,7 @@ export default function Home() {
                     recent.map((row) => (
                       <tr
                         key={row.$id}
-                        onClick={() => router.push(`/quotations-draft/edit?id=${row.$id}`)}
-                        className="cursor-pointer transition-colors hover:bg-brand-primary/[0.04] even:bg-[#F8FBFC]"
+                        className="transition-colors hover:bg-zinc-50 even:bg-[#F8FBFC]"
                       >
                         <td className="px-5 py-2.5">
                           <span className="font-bold text-brand-primary" style={{ fontSize: THEME.FONT_SIZE.SMALL }}>{row.quotation_no}</span>

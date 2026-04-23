@@ -264,7 +264,7 @@ const PartMachiningBlock = ({ item, idx, libraries, onUpdate, onPreviewFile }) =
             {item.design_files?.length > 0 && (
               <div className="flex flex-wrap items-center gap-1 mt-1.5">
                 {item.design_files.map((file, fIdx) => {
-                  const isCAD = ['.stp', '.step', '.dwg', '.dxf'].some(ext => file.name?.toLowerCase().endsWith(ext));
+                  const isPDF = file.name?.toLowerCase().endsWith('.pdf');
                   const baseName = file.name?.replace(/\.[^/.]+$/, '') ?? '';
                   const ext = file.name?.split('.').pop()?.toUpperCase() ?? '';
                   return (
@@ -272,17 +272,17 @@ const PartMachiningBlock = ({ item, idx, libraries, onUpdate, onPreviewFile }) =
                       key={fIdx}
                       type="button"
                       onClick={() => onPreviewFile(file)}
-                      className={`flex items-center gap-1 px-1.5 py-0.5 rounded border transition-all hover:scale-105 active:scale-95 ${isCAD ? 'bg-cyan-50 border-cyan-200 hover:border-cyan-400' : 'bg-red-50 border-red-200 hover:border-red-400'}`}
+                      className={`flex items-center gap-1 px-1.5 py-0.5 rounded border transition-all hover:scale-105 active:scale-95 ${!isPDF ? 'bg-cyan-50 border-cyan-200 hover:border-cyan-400' : 'bg-red-50 border-red-200 hover:border-red-400'}`}
                     >
-                      {isCAD ? (
+                      {!isPDF ? (
                         <svg className="h-2.5 w-2.5 text-cyan-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
                         </svg>
                       ) : (
                         <FileText className="h-2.5 w-2.5 text-red-500 flex-shrink-0" />
                       )}
-                      <span className={`font-bold uppercase tracking-tight truncate max-w-[100px] leading-none ${isCAD ? 'text-cyan-800' : 'text-red-800'}`} style={{ fontSize: '8px' }}>{baseName}</span>
-                      <span className={`font-black uppercase opacity-50 flex-shrink-0 leading-none ${isCAD ? 'text-cyan-700' : 'text-red-700'}`} style={{ fontSize: '8px' }}>.{ext}</span>
+                      <span className={`font-bold uppercase tracking-tight truncate max-w-[100px] leading-none ${!isPDF ? 'text-cyan-800' : 'text-red-800'}`} style={{ fontSize: '8px' }}>{baseName}</span>
+                      <span className={`font-black uppercase opacity-50 flex-shrink-0 leading-none ${!isPDF ? 'text-cyan-700' : 'text-red-700'}`} style={{ fontSize: '8px' }}>.{ext}</span>
                     </button>
                   );
                 })}

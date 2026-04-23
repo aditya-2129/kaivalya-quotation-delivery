@@ -232,7 +232,17 @@ const ScopeAndIdentity = ({
                className="w-full h-8.5 px-4 rounded-lg bg-zinc-50 border border-zinc-200 focus:ring-2 focus:ring-zinc-950 focus:bg-white outline-none transition-all font-semibold text-black shadow-sm"
                style={{ fontSize: THEME.FONT_SIZE.SMALL }}
                value={formData.inquiry_date || ""}
-               onChange={(e) => setFormData(prev => ({ ...prev, inquiry_date: e.target.value }))}
+               onChange={(e) => {
+                  const newInquiryDate = e.target.value;
+                  setFormData(prev => {
+                     const updates = { inquiry_date: newInquiryDate };
+                     // If delivery date exists and is now before the new inquiry date, clear it
+                     if (prev.delivery_date && prev.delivery_date < newInquiryDate) {
+                        updates.delivery_date = "";
+                     }
+                     return { ...prev, ...updates };
+                  });
+               }}
              />
           </div>
           <div>
@@ -246,7 +256,14 @@ const ScopeAndIdentity = ({
                className="w-full h-8.5 px-4 rounded-lg bg-zinc-50 border border-zinc-200 focus:ring-2 focus:ring-zinc-950 focus:bg-white outline-none transition-all font-semibold text-black shadow-sm"
                style={{ fontSize: THEME.FONT_SIZE.SMALL }}
                value={formData.delivery_date || ""}
-               onChange={(e) => setFormData(prev => ({ ...prev, delivery_date: e.target.value }))}
+               min={formData.inquiry_date}
+               onChange={(e) => {
+                  const val = e.target.value;
+                  if (formData.inquiry_date && val < formData.inquiry_date) {
+                     return; // Prevent setting date before inquiry date
+                  }
+                  setFormData(prev => ({ ...prev, delivery_date: val }));
+               }}
              />
           </div>
 

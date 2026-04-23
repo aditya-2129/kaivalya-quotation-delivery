@@ -59,6 +59,11 @@ const LogPoModal = ({ isOpen, onClose, quotation, onSuccess }) => {
       return;
     }
 
+    if (formData.poDate && formData.deliveryDate && formData.deliveryDate < formData.poDate) {
+      toast.error("Expected Delivery Date cannot be before PO Received Date");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
       toast.loading("Processing Purchase Order...");
@@ -174,7 +179,16 @@ const LogPoModal = ({ isOpen, onClose, quotation, onSuccess }) => {
                     type="date"
                     required
                     value={formData.poDate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, poDate: e.target.value }))}
+                    onChange={(e) => {
+                      const newPoDate = e.target.value;
+                      setFormData(prev => {
+                        const updates = { poDate: newPoDate };
+                        if (prev.deliveryDate && prev.deliveryDate < newPoDate) {
+                          updates.deliveryDate = "";
+                        }
+                        return { ...prev, ...updates };
+                      });
+                    }}
                     className="w-full h-10 pl-9 pr-3 rounded-xl border border-zinc-200 bg-zinc-50/30 text-[12px] font-bold focus:border-emerald-500 transition-all outline-none"
                   />
                 </div>
@@ -211,7 +225,14 @@ const LogPoModal = ({ isOpen, onClose, quotation, onSuccess }) => {
                   <input
                     type="date"
                     value={formData.deliveryDate}
-                    onChange={(e) => setFormData(prev => ({ ...prev, deliveryDate: e.target.value }))}
+                    min={formData.poDate}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (formData.poDate && val < formData.poDate) {
+                        return;
+                      }
+                      setFormData(prev => ({ ...prev, deliveryDate: val }));
+                    }}
                     className="w-full h-10 pl-9 pr-3 rounded-xl border border-zinc-200 bg-zinc-50/30 text-[12px] font-bold focus:border-emerald-500 transition-all outline-none"
                   />
                 </div>

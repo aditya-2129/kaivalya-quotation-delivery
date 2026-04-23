@@ -63,8 +63,9 @@ export const dashboardService = {
                 ]),
                 // Fetch all POs for actual revenue tracking
                 databases.listDocuments(DATABASE_ID, COLLECTIONS.PURCHASE_ORDERS, [
+                    Query.notEqual("status", "Cancelled"),
                     Query.limit(5000),
-                    Query.select(["total_amount", "actual_valuation", "$createdAt"]),
+                    Query.select(["total_amount", "actual_valuation", "po_date"]),
                 ]),
             ]);
 
@@ -74,11 +75,14 @@ export const dashboardService = {
 
             // Calculate monthly trends based on ACTUAL (PO) data
             const now = new Date();
-            const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
-            const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+            const startOfThisMonthStr = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+            const startOfLastMonthStr = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
 
-            const thisMonthPOs = allPOs.documents.filter(d => d.$createdAt >= startOfThisMonth);
-            const lastMonthPOs = allPOs.documents.filter(d => d.$createdAt >= startOfLastMonth && d.$createdAt < startOfThisMonth);
+            const thisMonthPOs = allPOs.documents.filter(d => (d.po_date || d.$createdAt) >= startOfThisMonthStr);
+            const lastMonthPOs = allPOs.documents.filter(d => {
+                const date = d.po_date || d.$createdAt;
+                return date >= startOfLastMonthStr && date < startOfThisMonthStr;
+            });
 
             const thisMonthRevenue = sumPOValue(thisMonthPOs);
             const lastMonthRevenue = sumPOValue(lastMonthPOs);
@@ -97,7 +101,7 @@ export const dashboardService = {
 
             // Metrics for approved quotations specifically
             const approvedThisMonthDocs = allQuotations.documents.filter(
-                (d) => d.status === "Approved" && d.$createdAt >= startOfThisMonth
+                (d) => d.status === "Approved" && d.$createdAt >= startOfThisMonthStr
             );
             const approvedThisMonthValue = approvedThisMonthDocs.reduce(
                 (sum, doc) => sum + (parseFloat(doc.total_amount) || 0),
@@ -120,7 +124,7 @@ export const dashboardService = {
                 approvedThisMonthValue,
                 trends: {
                     revenue: revenueTrend,
-                    quotationsThisMonth: allQuotations.documents.filter(d => d.$createdAt >= startOfThisMonth).length,
+                    quotationsThisMonth: allQuotations.documents.filter(d => d.$createdAt >= startOfThisMonthStr).length,
                 },
             };
         } catch (error) {
