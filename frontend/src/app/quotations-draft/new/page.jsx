@@ -27,6 +27,8 @@ import { generateProcessSheetPDF } from '@/utils/generateProcessSheetPDF';
 import { generateBOPListPDF } from '@/utils/generateBOPListPDF';
 import { assetService } from '@/services/assets';
 import DownloadOptionsModal from '@/components/modals/DownloadOptionsModal';
+import ExcelPreviewModal from '@/components/modals/ExcelPreviewModal';
+import { exportMaterialListToExcel, exportProcessSheetToExcel, exportBOPListToExcel, exportFullQuotationToExcel } from '@/utils/exportToExcel';
 import { toast } from 'react-hot-toast';
 import { calculateQuotationTotals } from '@/features/quotations/utils/calculations';
 
@@ -43,6 +45,13 @@ export default function NewQuotationPage() {
   const [lastQuotationRef, setLastQuotationRef] = useState('');
   const [savedQuotationData, setSavedQuotationData] = useState(null);
   const [downloadModal, setDownloadModal] = useState({ open: false, quotation: null });
+  const [excelPreview, setExcelPreview] = useState({
+    open: false,
+    title: "",
+    filename: "",
+    optionId: null,
+    quotation: null
+  });
   const [errorDetails, setErrorDetails] = useState({ open: false, message: '' });
   const [missingFields, setMissingFields] = useState([]);
   const [selectedItemIndex, setSelectedItemIndex] = useState(0);
@@ -419,6 +428,38 @@ export default function NewQuotationPage() {
       if (!quotation) return;
 
       try {
+         // ─── Excel exports (with preview) ───
+         if (optionId.endsWith('_excel')) {
+            setDownloadModal({ open: false, quotation: null });
+            
+            let title = "Excel Preview";
+            let filename = "document.xlsx";
+
+            if (optionId === 'material_excel') {
+              title = "Material List (Excel)";
+              filename = `MaterialList_${quotation.quotation_no}.xlsx`;
+            } else if (optionId === 'process_excel') {
+              title = "Process Sheet (Excel)";
+              filename = `ProcessSheet_${quotation.quotation_no}.xlsx`;
+            } else if (optionId === 'bop_excel') {
+              title = "BOP List (Excel)";
+              filename = `BOP_List_${quotation.quotation_no}.xlsx`;
+            } else if (optionId === 'full_excel') {
+              title = "Full Quotation (Excel)";
+              filename = `Full_Quotation_${quotation.quotation_no}.xlsx`;
+            }
+
+            setExcelPreview({
+              open: true,
+              title,
+              filename,
+              optionId,
+              quotation
+            });
+            return;
+         }
+
+         // ─── PDF exports (direct save) ───
          let projectImageUrl = null;
          if (quotation.project_image) {
             try {
@@ -448,6 +489,26 @@ export default function NewQuotationPage() {
          toast.error("Export encountered an error. Please try again.");
       }
    };
+
+   const handleExcelDownload = () => {
+    const { optionId, quotation, filename } = excelPreview;
+    if (!quotation || !optionId) return;
+
+    toast.loading('Generating Excel export...', { id: 'excel-gen' });
+    
+    if (optionId === 'material_excel') {
+      exportMaterialListToExcel(quotation, filename);
+    } else if (optionId === 'process_excel') {
+      exportProcessSheetToExcel(quotation, filename);
+    } else if (optionId === 'bop_excel') {
+      exportBOPListToExcel(quotation, filename);
+    } else if (optionId === 'full_excel') {
+      exportFullQuotationToExcel(quotation, filename);
+    }
+
+    toast.dismiss('excel-gen');
+    toast.success('Excel file downloaded successfully!');
+  };
 
    const handleSaveDraft = () => {
       // Minimal validation for draft
@@ -730,6 +791,14 @@ export default function NewQuotationPage() {
         onClose={() => setDownloadModal({ open: false, quotation: null })}
         onDownload={handleDownloadExecution}
         quotationNo={downloadModal.quotation?.quotation_no}
+      />
+
+      <ExcelPreviewModal
+        isOpen={excelPreview.open}
+        onClose={() => setExcelPreview({ ...excelPreview, open: false })}
+        onDownload={handleExcelDownload}
+        title={excelPreview.title}
+        filename={excelPreview.filename}
       />
     </DashboardLayout>
   );

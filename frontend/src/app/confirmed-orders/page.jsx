@@ -30,6 +30,7 @@ import { purchaseOrderService } from "@/services/purchase-orders";
 import { approvedQuotationService } from "@/services/quotations-approved";
 import { toast } from "react-hot-toast";
 import PdfPreviewModal from "@/components/modals/PdfPreviewModal";
+import ExcelPreviewModal from "@/components/modals/ExcelPreviewModal";
 import DownloadOptionsModal from "@/components/modals/DownloadOptionsModal";
 import QuotationPreviewModal from "@/components/modals/QuotationPreviewModal";
 import { generateQuotationPDF } from "@/utils/generateQuotationPDF";
@@ -37,7 +38,7 @@ import { generateMaterialListPDF } from "@/utils/generateMaterialListPDF";
 import { generateSinglePagePDF } from "@/utils/generateSinglePagePDF";
 import { generateProcessSheetPDF } from "@/utils/generateProcessSheetPDF";
 import { generateBOPListPDF } from "@/utils/generateBOPListPDF";
-import { exportPurchaseOrdersToExcel } from "@/utils/exportToExcel";
+import { exportPurchaseOrdersToExcel, exportMaterialListToExcel, exportProcessSheetToExcel, exportBOPListToExcel, exportFullQuotationToExcel } from "@/utils/exportToExcel";
 
 export default function ConfirmedOrdersPage() {
   const [page, setPage] = useState(1);
@@ -65,6 +66,13 @@ export default function ConfirmedOrdersPage() {
     doc: null,
     title: "",
     filename: "",
+  });
+  const [excelPreview, setExcelPreview] = useState({
+    open: false,
+    title: "",
+    filename: "",
+    optionId: null,
+    quotation: null
   });
 
   const { data: usersData } = useUsers();
@@ -155,6 +163,39 @@ export default function ConfirmedOrdersPage() {
         order.quotation_id,
       );
 
+      // ─── Excel exports (with preview) ───
+      if (optionId.endsWith('_excel')) {
+        setDownloadModal({ open: false, order: null });
+        
+        let title = "Excel Preview";
+        let filename = "document.xlsx";
+
+        if (optionId === 'material_excel') {
+          title = "Material List (Excel)";
+          filename = `MaterialList_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'process_excel') {
+          title = "Process Sheet (Excel)";
+          filename = `ProcessSheet_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'bop_excel') {
+          title = "BOP List (Excel)";
+          filename = `BOP_List_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'full_excel') {
+          title = "Full Quotation (Excel)";
+          filename = `Full_Quotation_${fullQuote.quotation_no}.xlsx`;
+        }
+
+        toast.dismiss("pdf-gen");
+        setExcelPreview({
+          open: true,
+          title,
+          filename,
+          optionId,
+          quotation: fullQuote
+        });
+        return;
+      }
+
+      // ─── PDF exports (with preview) ───
       let projectImageUrl = null;
       if (fullQuote.project_image) {
         try {
@@ -223,6 +264,26 @@ export default function ConfirmedOrdersPage() {
       toast.error("Export failed.");
       console.error(err);
     }
+  };
+
+  const handleExcelDownload = () => {
+    const { optionId, quotation, filename } = excelPreview;
+    if (!quotation || !optionId) return;
+
+    toast.loading('Generating Excel export...', { id: 'excel-gen' });
+    
+    if (optionId === 'material_excel') {
+      exportMaterialListToExcel(quotation, filename);
+    } else if (optionId === 'process_excel') {
+      exportProcessSheetToExcel(quotation, filename);
+    } else if (optionId === 'bop_excel') {
+      exportBOPListToExcel(quotation, filename);
+    } else if (optionId === 'full_excel') {
+      exportFullQuotationToExcel(quotation, filename);
+    }
+
+    toast.dismiss('excel-gen');
+    toast.success('Excel file downloaded successfully!');
   };
 
   const orders = data?.documents || [];
@@ -712,6 +773,14 @@ export default function ConfirmedOrdersPage() {
         pdfDoc={pdfPreview.doc}
         title={pdfPreview.title}
         filename={pdfPreview.filename}
+      />
+
+      <ExcelPreviewModal
+        isOpen={excelPreview.open}
+        onClose={() => setExcelPreview({ ...excelPreview, open: false })}
+        onDownload={handleExcelDownload}
+        title={excelPreview.title}
+        filename={excelPreview.filename}
       />
     </DashboardLayout>
   );

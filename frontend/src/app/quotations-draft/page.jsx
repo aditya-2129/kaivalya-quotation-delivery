@@ -15,6 +15,7 @@ import ConfirmationModal from '@/components/modals/ConfirmationModal';
 import QuotationPreviewModal from '@/components/modals/QuotationPreviewModal';
 import DownloadOptionsModal from '@/components/modals/DownloadOptionsModal';
 import PdfPreviewModal from '@/components/modals/PdfPreviewModal';
+import ExcelPreviewModal from '@/components/modals/ExcelPreviewModal';
 import Pagination from '@/components/ui/Pagination';
 import DateRangePicker from '@/components/ui/DateRangePicker';
 import { generateQuotationPDF } from '@/utils/generateQuotationPDF';
@@ -22,6 +23,7 @@ import { generateMaterialListPDF } from '@/utils/generateMaterialListPDF';
 import { generateSinglePagePDF } from '@/utils/generateSinglePagePDF';
 import { generateProcessSheetPDF } from '@/utils/generateProcessSheetPDF';
 import { generateBOPListPDF } from '@/utils/generateBOPListPDF';
+import { exportMaterialListToExcel, exportProcessSheetToExcel, exportBOPListToExcel, exportFullQuotationToExcel } from '@/utils/exportToExcel';
 import { useAuth } from '@/context/AuthContext';
 import { useQuotations, useDeleteQuotation } from '@/features/quotations/api/useQuotations';
 
@@ -52,6 +54,13 @@ export default function QuotationsPage() {
   const [previewId, setPreviewId] = useState(null);
   const [downloadModal, setDownloadModal] = useState({ open: false, quotation: null });
   const [pdfPreview, setPdfPreview] = useState({ open: false, doc: null, title: '', filename: '' });
+  const [excelPreview, setExcelPreview] = useState({
+    open: false,
+    title: "",
+    filename: "",
+    optionId: null,
+    quotation: null
+  });
   const router = useRouter();
 
   const quotations = data?.documents || [];
@@ -63,6 +72,39 @@ export default function QuotationsPage() {
 
     try {
       const fullQuote = await quotationService.getQuotation(quotation.$id);
+
+      // ─── Excel exports (with preview) ───
+      if (optionId.endsWith('_excel')) {
+        setDownloadModal({ open: false, quotation: null });
+        
+        let title = "Excel Preview";
+        let filename = "document.xlsx";
+
+        if (optionId === 'material_excel') {
+          title = "Material List (Excel)";
+          filename = `MaterialList_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'process_excel') {
+          title = "Process Sheet (Excel)";
+          filename = `ProcessSheet_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'bop_excel') {
+          title = "BOP List (Excel)";
+          filename = `BOP_List_${fullQuote.quotation_no}.xlsx`;
+        } else if (optionId === 'full_excel') {
+          title = "Full Quotation (Excel)";
+          filename = `Full_Quotation_${fullQuote.quotation_no}.xlsx`;
+        }
+
+        setExcelPreview({
+          open: true,
+          title,
+          filename,
+          optionId,
+          quotation: fullQuote
+        });
+        return;
+      }
+
+      // ─── PDF exports (with preview) ───
       let projectImageUrl = null;
       if (fullQuote.project_image) {
         try {
@@ -113,6 +155,26 @@ export default function QuotationsPage() {
     } catch (err) {
       toast.error("Export failed.");
     }
+  };
+
+  const handleExcelDownload = () => {
+    const { optionId, quotation, filename } = excelPreview;
+    if (!quotation || !optionId) return;
+
+    toast.loading('Generating Excel export...', { id: 'excel-gen' });
+    
+    if (optionId === 'material_excel') {
+      exportMaterialListToExcel(quotation, filename);
+    } else if (optionId === 'process_excel') {
+      exportProcessSheetToExcel(quotation, filename);
+    } else if (optionId === 'bop_excel') {
+      exportBOPListToExcel(quotation, filename);
+    } else if (optionId === 'full_excel') {
+      exportFullQuotationToExcel(quotation, filename);
+    }
+
+    toast.dismiss('excel-gen');
+    toast.success('Excel file downloaded successfully!');
   };
 
   const commitDelete = async () => {
@@ -309,6 +371,14 @@ export default function QuotationsPage() {
           filename={pdfPreview.filename}
         />
       )}
+
+      <ExcelPreviewModal
+        isOpen={excelPreview.open}
+        onClose={() => setExcelPreview({ ...excelPreview, open: false })}
+        onDownload={handleExcelDownload}
+        title={excelPreview.title}
+        filename={excelPreview.filename}
+      />
 
       {showDatePicker && (
         <DateRangePicker 
