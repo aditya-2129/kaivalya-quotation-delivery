@@ -5,7 +5,7 @@ import * as XLSX from 'xlsx-js-style';
  * @param {Array} data - Array of quotation objects
  * @param {string} fileName - Suggest filename
  */
-export const exportQuotationsToExcel = (data, fileName = 'Approved_Quotations.xlsx') => {
+export const exportQuotationsToExcel = (data, fileName = 'Approved_Quotations.xlsx', returnWorkbook = false) => {
   if (!data || data.length === 0) return;
 
   // Transform data for better spreadsheet readability
@@ -116,6 +116,7 @@ export const exportQuotationsToExcel = (data, fileName = 'Approved_Quotations.xl
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Quotations');
 
   // Generate and download file
+  if (returnWorkbook) return workbook;
   XLSX.writeFile(workbook, fileName);
 };
 
@@ -124,7 +125,7 @@ export const exportQuotationsToExcel = (data, fileName = 'Approved_Quotations.xl
  * @param {Array} data - Array of purchase order objects
  * @param {string} fileName - Suggest filename
  */
-export const exportPurchaseOrdersToExcel = (data, fileName = 'Confirmed_Orders.xlsx') => {
+export const exportPurchaseOrdersToExcel = (data, fileName = 'Confirmed_Orders.xlsx', returnWorkbook = false) => {
   if (!data || data.length === 0) return;
 
   // Transform data for better spreadsheet readability
@@ -241,21 +242,136 @@ export const exportPurchaseOrdersToExcel = (data, fileName = 'Confirmed_Orders.x
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Purchase Orders');
 
   // Generate and download file
+  if (returnWorkbook) return workbook;
   XLSX.writeFile(workbook, fileName);
 };
 
+// ─── HELPER: Add branded header block to a worksheet ───
+// Inserts 4 rows above the data: Company name, doc metadata, section title, blank separator.
+// Returns the row offset so that subsequent styling knows where the data table starts.
+function addSheetHeader(worksheet, { docLabel, qtnNo, sectionTitle, colCount }) {
+  const COMPANY_NAME = 'KAIVALYA ENGINEERING';
+  const docMeta = `${docLabel} | QTN: ${qtnNo || '—'}`;
+
+  // Shift existing rows down by 4 to make room for the header
+  XLSX.utils.sheet_add_aoa(worksheet, [[]], { origin: 'A1' }); // placeholder — shift done via origin below
+
+  // Read current range, then rebuild with header prepended
+  const origRef = worksheet['!ref'];
+  const origRange = XLSX.utils.decode_range(origRef);
+
+  // We'll insert 4 rows: [0] Company + Meta, [1] blank, [2] Section Title, [3] blank separator
+  const HEADER_ROWS = 4;
+
+  // Shift all existing cells down by HEADER_ROWS
+  for (let R = origRange.e.r; R >= origRange.s.r; --R) {
+    for (let C = origRange.s.c; C <= origRange.e.c; ++C) {
+      const oldAddr = XLSX.utils.encode_cell({ r: R, c: C });
+      const newAddr = XLSX.utils.encode_cell({ r: R + HEADER_ROWS, c: C });
+      if (worksheet[oldAddr]) {
+        worksheet[newAddr] = worksheet[oldAddr];
+        delete worksheet[oldAddr];
+      }
+    }
+  }
+
+  // Shift existing row heights down
+  if (worksheet['!rows']) {
+    const oldRows = worksheet['!rows'];
+    const newRows = new Array(HEADER_ROWS).fill({ hpt: 22 });
+    worksheet['!rows'] = [...newRows, ...oldRows];
+  }
+
+  // Update range to include new rows
+  origRange.e.r += HEADER_ROWS;
+  worksheet['!ref'] = XLSX.utils.encode_range(origRange);
+
+  // Shift merges down
+  if (worksheet['!merges']) {
+    worksheet['!merges'] = worksheet['!merges'].map(m => ({
+      s: { r: m.s.r + HEADER_ROWS, c: m.s.c },
+      e: { r: m.e.r + HEADER_ROWS, c: m.e.c }
+    }));
+  }
+
+  // Shift autofilter down
+  if (worksheet['!autofilter']) {
+    const afRange = XLSX.utils.decode_range(worksheet['!autofilter'].ref);
+    afRange.s.r += HEADER_ROWS;
+    afRange.e.r += HEADER_ROWS;
+    worksheet['!autofilter'] = { ref: XLSX.utils.encode_range(afRange) };
+  }
+
+  const lastCol = Math.max(colCount - 1, 0);
+  const midCol = Math.floor(lastCol / 2);
+  const metaCol = midCol + 1;
+
+  // Row 0: Company Name (left) + Doc Meta (right)
+  worksheet[XLSX.utils.encode_cell({ r: 0, c: 0 })] = { v: COMPANY_NAME, t: 's' };
+  worksheet[XLSX.utils.encode_cell({ r: 0, c: metaCol })] = { v: docMeta, t: 's' };
+
+  // Row 1: Empty (line separator effect)
+
+  // Row 2: Section Title (centered, merged)
+  worksheet[XLSX.utils.encode_cell({ r: 2, c: 0 })] = { v: sectionTitle, t: 's' };
+
+  // Row 3: Empty (spacer before data table)
+
+  // Add merges for header rows
+  if (!worksheet['!merges']) worksheet['!merges'] = [];
+  // Merge company name
+  if (midCol > 0) {
+    worksheet['!merges'].push({ s: { r: 0, c: 0 }, e: { r: 0, c: midCol } });
+  }
+  // Merge doc metadata
+  if (lastCol > metaCol) {
+    worksheet['!merges'].push({ s: { r: 0, c: metaCol }, e: { r: 0, c: lastCol } });
+  }
+  // Merge section title across all columns
+  worksheet['!merges'].push({ s: { r: 2, c: 0 }, e: { r: 2, c: lastCol } });
+
+  // Style header area
+  // Row 0: Company name — bold navy, large
+  worksheet[XLSX.utils.encode_cell({ r: 0, c: 0 })].s = {
+    font: { name: 'Calibri', sz: 14, bold: true, color: { rgb: '1E407D' } },
+    alignment: { horizontal: 'left', vertical: 'center' }
+  };
+  // Row 0: Doc metadata — right-aligned, small gray
+  worksheet[XLSX.utils.encode_cell({ r: 0, c: metaCol })].s = {
+    font: { name: 'Calibri', sz: 9, color: { rgb: '666666' } },
+    alignment: { horizontal: 'right', vertical: 'center' }
+  };
+
+  // Row 2: Section title — centered, bold, medium
+  worksheet[XLSX.utils.encode_cell({ r: 2, c: 0 })].s = {
+    font: { name: 'Calibri', sz: 12, bold: true, color: { rgb: '000000' } },
+    alignment: { horizontal: 'center', vertical: 'center' }
+  };
+
+  // Set header row heights
+  const rowHeights = worksheet['!rows'] || [];
+  rowHeights[0] = { hpt: 28 }; // Company row
+  rowHeights[1] = { hpt: 8 };  // Separator
+  rowHeights[2] = { hpt: 24 }; // Section title
+  rowHeights[3] = { hpt: 8 };  // Spacer
+  worksheet['!rows'] = rowHeights;
+
+  return HEADER_ROWS;
+}
+
 // ─── HELPER: Apply professional styling to a worksheet ───
-function applyProfessionalStyling(worksheet, { numberCols = [], currencyCols = [] } = {}) {
+function applyProfessionalStyling(worksheet, { numberCols = [], currencyCols = [], dataStartRow = 0 } = {}) {
   const range = XLSX.utils.decode_range(worksheet['!ref']);
 
-  for (let R = range.s.r; R <= range.e.r; ++R) {
+  // Only style from dataStartRow onwards (skip branded header rows)
+  for (let R = dataStartRow; R <= range.e.r; ++R) {
     for (let C = range.s.c; C <= range.e.c; ++C) {
       const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
       if (!worksheet[cellAddress]) continue;
 
-      const isHeader = R === 0;
+      const isHeader = R === dataStartRow;
       const isTotalRow = R === range.e.r;
-      const isEvenRow = R % 2 === 0 && !isHeader && !isTotalRow;
+      const isEvenRow = (R - dataStartRow) % 2 === 0 && !isHeader && !isTotalRow;
       const isNumCol = numberCols.includes(C) || currencyCols.includes(C);
 
       let fillStyle = null;
@@ -296,10 +412,10 @@ function applyProfessionalStyling(worksheet, { numberCols = [], currencyCols = [
     }
   }
 
-  // Row heights
-  const rowHeights = [];
-  for (let R = 0; R <= range.e.r; ++R) {
-    rowHeights.push({ hpt: R === 0 ? 30 : (R === range.e.r ? 35 : 22) });
+  // Row heights (only for data rows, header rows handled by addSheetHeader)
+  const rowHeights = worksheet['!rows'] || [];
+  for (let R = dataStartRow; R <= range.e.r; ++R) {
+    rowHeights[R] = { hpt: R === dataStartRow ? 30 : (R === range.e.r ? 35 : 22) };
   }
   worksheet['!rows'] = rowHeights;
 }
@@ -319,7 +435,7 @@ function safeParseBreakdown(raw) {
  * @param {Object} quote - Full quotation object
  * @param {string} fileName - Output filename
  */
-export const exportMaterialListToExcel = (quote, fileName) => {
+export const exportMaterialListToExcel = (quote, fileName, returnWorkbook = false) => {
   if (!quote) return;
   if (!fileName) fileName = `MaterialList_${quote.quotation_no || 'Export'}.xlsx`;
 
@@ -366,11 +482,16 @@ export const exportMaterialListToExcel = (quote, fileName) => {
 
   const worksheet = XLSX.utils.json_to_sheet(rows);
 
-  // Currency cols: Rate(7), Amount(8)  |  Number cols: Qty(4), Unit Wt(5), Total Wt(6)
-  applyProfessionalStyling(worksheet, { numberCols: [4, 5, 6], currencyCols: [7, 8] });
+  // Add branded header (shifts data down by 4 rows)
+  const headerOffset = addSheetHeader(worksheet, {
+    docLabel: 'MATERIAL LIST',
+    qtnNo: quote.quotation_no,
+    sectionTitle: 'SECTION 01: RAW MATERIAL SPECIFICATIONS',
+    colCount: 9
+  });
 
-  // Auto-filter (exclude total row)
-  worksheet['!autofilter'] = { ref: `A1:I${rows.length}` };
+  // Currency cols: Rate(7), Amount(8)  |  Number cols: Qty(4), Unit Wt(5), Total Wt(6)
+  applyProfessionalStyling(worksheet, { numberCols: [4, 5, 6], currencyCols: [7, 8], dataStartRow: headerOffset });
 
   // Column widths
   worksheet['!cols'] = [
@@ -387,6 +508,7 @@ export const exportMaterialListToExcel = (quote, fileName) => {
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Material List');
+  if (returnWorkbook) return workbook;
   XLSX.writeFile(workbook, fileName);
 };
 
@@ -398,7 +520,7 @@ export const exportMaterialListToExcel = (quote, fileName) => {
  * @param {Object} quote - Full quotation object
  * @param {string} fileName - Output filename
  */
-export const exportProcessSheetToExcel = (quote, fileName) => {
+export const exportProcessSheetToExcel = (quote, fileName, returnWorkbook = false) => {
   if (!quote) return;
   if (!fileName) fileName = `ProcessSheet_${quote.quotation_no || 'Export'}.xlsx`;
 
@@ -416,10 +538,9 @@ export const exportProcessSheetToExcel = (quote, fileName) => {
 
         let amount = 0;
         if (unit === 'hr') {
-          const totalMinutesPerSet = (setup / projectQty) + (cycle * (item.qty || 1));
-          amount = (rate / 60) * totalMinutesPerSet;
+          amount = ((setup + (cycle * (item.qty || 1))) / 60) * rate;
         } else {
-          amount = cycle * (item.qty || 1) * rate;
+          amount = (setup + (cycle * (item.qty || 1))) * rate;
         }
 
         rows.push({
@@ -452,9 +573,15 @@ export const exportProcessSheetToExcel = (quote, fileName) => {
     'Setup (min)': '—', 'Cycle (min)': '—', 'Rate': '—', 'Amount (₹)': '—'
   }]);
 
-  applyProfessionalStyling(worksheet, { numberCols: [3, 4], currencyCols: [6] });
+  // Add branded header (shifts data down by 4 rows)
+  const headerOffset = addSheetHeader(worksheet, {
+    docLabel: 'PROCESS SHEET',
+    qtnNo: quote.quotation_no,
+    sectionTitle: 'SECTION 02: MANUFACTURING PROCESS SHEET',
+    colCount: 7
+  });
 
-  worksheet['!autofilter'] = { ref: `A1:G${rows.length}` };
+  applyProfessionalStyling(worksheet, { numberCols: [3, 4], currencyCols: [6], dataStartRow: headerOffset });
 
   worksheet['!cols'] = [
     { wch: 6 },   // Sr.
@@ -468,6 +595,7 @@ export const exportProcessSheetToExcel = (quote, fileName) => {
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'Process Sheet');
+  if (returnWorkbook) return workbook;
   XLSX.writeFile(workbook, fileName);
 };
 
@@ -479,7 +607,7 @@ export const exportProcessSheetToExcel = (quote, fileName) => {
  * @param {Object} quote - Full quotation object
  * @param {string} fileName - Output filename
  */
-export const exportBOPListToExcel = (quote, fileName) => {
+export const exportBOPListToExcel = (quote, fileName, returnWorkbook = false) => {
   if (!quote) return;
   if (!fileName) fileName = `BOP_List_${quote.quotation_no || 'Export'}.xlsx`;
 
@@ -515,9 +643,15 @@ export const exportBOPListToExcel = (quote, fileName) => {
     'Qty': '—', 'Rate (₹)': '—', 'Total (₹)': '—'
   }]);
 
-  applyProfessionalStyling(worksheet, { numberCols: [3], currencyCols: [4, 5] });
+  // Add branded header (shifts data down by 4 rows)
+  const headerOffset = addSheetHeader(worksheet, {
+    docLabel: 'BOP LIST',
+    qtnNo: quote.quotation_no,
+    sectionTitle: 'SECTION 03: BOP PROCUREMENT LIST',
+    colCount: 6
+  });
 
-  worksheet['!autofilter'] = { ref: `A1:F${rows.length}` };
+  applyProfessionalStyling(worksheet, { numberCols: [3], currencyCols: [4, 5], dataStartRow: headerOffset });
 
   worksheet['!cols'] = [
     { wch: 6 },   // Sr.
@@ -530,11 +664,12 @@ export const exportBOPListToExcel = (quote, fileName) => {
 
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, 'BOP List');
+  if (returnWorkbook) return workbook;
   XLSX.writeFile(workbook, fileName);
 };
 
 // ─── FULL QUOTATION (Multi-Sheet Workbook) ───
-export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xlsx') => {
+export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xlsx', returnWorkbook = false) => {
   if (!quote) return;
 
   const items = safeParseItems(quote.items);
@@ -544,41 +679,52 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
   const workbook = XLSX.utils.book_new();
 
   // ────────────────────────────────────────────────
-  // SHEET 1: QUOTATION SUMMARY
+  // SHEET 1: NEW SHEET (Placeholder)
+  // ────────────────────────────────────────────────
+  const newSheetData = [
+    ['New Sheet'],
+    ['(Please specify the content for this sheet)']
+  ];
+  const newSheetWS = XLSX.utils.aoa_to_sheet(newSheetData);
+  XLSX.utils.book_append_sheet(workbook, newSheetWS, 'Cover'); // Temporary name
+
+  // ────────────────────────────────────────────────
+  // SHEET 2: QUOTATION SUMMARY
   // ────────────────────────────────────────────────
   const summaryData = [];
+  const docMeta = `FULL QUOTATION | QTN: ${quote.quotation_no || '—'}`;
 
-  // Company header block
-  summaryData.push(['KAIVALYA ENGINEERING']);
-  summaryData.push(['Manufacturing & Supply of SPM, Precision Tools, Die & Components']);
-  summaryData.push(['Pavana Industrial Premises, Bhoseri, PCMC, Pune 411044']);
-  summaryData.push(['Phone: 9527352858  |  Email: info@kaivalya.co.in']);
-  summaryData.push(['GSTIN: 27AAKPF1080D1Z4  |  State: Maharashtra CODE:27']);
-  summaryData.push([]);
+  // Company header block (matches addSheetHeader style but includes address)
+  summaryData.push(['KAIVALYA ENGINEERING', '', docMeta]);
+  summaryData.push(['Manufacturing & Supply of SPM, Precision Tools, Die & Components', '', '']);
+  summaryData.push(['Pavana Industrial Premises, Bhoseri, PCMC, Pune 411044', '', '']);
+  summaryData.push(['Phone: 9527352858  |  Email: info@kaivalya.co.in', '', '']);
+  summaryData.push(['GSTIN: 27AAKPF1080D1Z4  |  State: Maharashtra CODE:27', '', '']);
+  summaryData.push(['', '', '']); // spacer
 
   // Quotation metadata block
-  summaryData.push(['QUOTATION SUMMARY']);
-  summaryData.push([]);
-  summaryData.push(['Field', 'Value']);
-  summaryData.push(['Quotation No.', quote.quotation_no || '—']);
-  summaryData.push(['Date', quote.inquiry_date ? new Date(quote.inquiry_date).toLocaleDateString('en-GB') : '—']);
-  summaryData.push(['Customer', quote.supplier_name || '—']);
-  summaryData.push(['Project Name', quote.project_name || '—']);
-  summaryData.push(['Contact Person', quote.contact_person || '—']);
-  summaryData.push(['Phone', quote.contact_phone || '—']);
-  summaryData.push(['Email', quote.contact_email || '—']);
-  summaryData.push(['Project Incharge', quote.quoting_engineer || '—']);
-  summaryData.push(['Revision', quote.revision_no || '—']);
-  summaryData.push(['Ref No.', breakdown.order_ref_no || '—']);
-  summaryData.push(['Valid For', breakdown.valid_for || '15 DAYS']);
-  summaryData.push(['Delivery Date', quote.delivery_date ? new Date(quote.delivery_date).toLocaleDateString('en-GB') : '—']);
-  summaryData.push(['Quantity', projectQty]);
-  summaryData.push(['Production Mode', quote.production_mode || '—']);
-  summaryData.push([]);
+  summaryData.push(['SECTION 01: QUOTATION SUMMARY', '', '']);
+  summaryData.push(['', '', '']); // spacer
+  summaryData.push(['Field', 'Value', '']);
+  summaryData.push(['Quotation No.', quote.quotation_no || '—', '']);
+  summaryData.push(['Date', quote.inquiry_date ? new Date(quote.inquiry_date).toLocaleDateString('en-GB') : '—', '']);
+  summaryData.push(['Customer', quote.supplier_name || '—', '']);
+  summaryData.push(['Project Name', quote.project_name || '—', '']);
+  summaryData.push(['Contact Person', quote.contact_person || '—', '']);
+  summaryData.push(['Phone', quote.contact_phone || '—', '']);
+  summaryData.push(['Email', quote.contact_email || '—', '']);
+  summaryData.push(['Project Incharge', quote.quoting_engineer || '—', '']);
+  summaryData.push(['Revision', quote.revision_no || '—', '']);
+  summaryData.push(['Ref No.', breakdown.order_ref_no || '—', '']);
+  summaryData.push(['Valid For', breakdown.valid_for || '15 DAYS', '']);
+  summaryData.push(['Delivery Date', quote.delivery_date ? new Date(quote.delivery_date).toLocaleDateString('en-GB') : '—', '']);
+  summaryData.push(['Quantity', projectQty, '']);
+  summaryData.push(['Production Mode', quote.production_mode || '—', '']);
+  summaryData.push(['', '', '']); // spacer
 
   // Cost breakdown ledger
-  summaryData.push(['VALUATION LEDGER']);
-  summaryData.push([]);
+  summaryData.push(['SECTION 02: VALUATION LEDGER', '', '']);
+  summaryData.push(['', '', '']); // spacer
   summaryData.push(['Cost Head', 'Per Unit (₹)', 'Total (₹)']);
 
   const matCost = parseFloat(breakdown.materialCost || 0);
@@ -596,15 +742,15 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
   summaryData.push(['Machining / Labour', r2(labCost), r2(labCost * projectQty)]);
   summaryData.push(['Bought-Out Parts (BOP)', r2(bopCostVal), r2(bopCostVal * projectQty)]);
   summaryData.push(['Surface Treatments', r2(treatCost), r2(treatCost * projectQty)]);
-  summaryData.push([]);
+  summaryData.push(['', '', '']);
   summaryData.push(['Unit Subtotal', r2(unitSubtotal), '']);
   summaryData.push([`Markup (${markupPct}%)`, r2(unitFinal - unitSubtotal), '']);
   summaryData.push(['Unit Price (Final)', r2(unitFinal), '']);
-  summaryData.push([]);
+  summaryData.push(['', '', '']);
   summaryData.push(['Qty × Unit Price', '', r2(unitFinal * projectQty)]);
   summaryData.push(['Engineering / Design', '', r2(engCost)]);
   summaryData.push(['Logistics / Packaging', '', r2(commCost)]);
-  summaryData.push([]);
+  summaryData.push(['', '', '']);
   summaryData.push(['GRAND TOTAL (₹)', '', r2(grandTotal)]);
 
   const summaryWS = XLSX.utils.aoa_to_sheet(summaryData);
@@ -614,29 +760,37 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
   for (let R = sRange.s.r; R <= sRange.e.r; ++R) {
     for (let C = sRange.s.c; C <= sRange.e.c; ++C) {
       const addr = XLSX.utils.encode_cell({ r: R, c: C });
-      if (!summaryWS[addr]) continue;
+      if (!summaryWS[addr]) summaryWS[addr] = { v: '', t: 's' };
 
       const val = summaryWS[addr].v;
       let style = { font: { name: 'Calibri', sz: 11 }, alignment: { vertical: 'center' } };
 
       // Company header rows (0-4)
       if (R === 0) {
-        style.font = { name: 'Calibri', sz: 16, bold: true, color: { rgb: '1E407D' } };
-        style.alignment = { horizontal: 'left' };
+        if (C === 0) {
+          style.font = { name: 'Calibri', sz: 16, bold: true, color: { rgb: '1E407D' } };
+          style.alignment = { horizontal: 'left', vertical: 'center' };
+        } else if (C === 2) {
+          style.font = { name: 'Calibri', sz: 9, color: { rgb: '666666' } };
+          style.alignment = { horizontal: 'right', vertical: 'center' };
+        }
       } else if (R >= 1 && R <= 4) {
-        style.font = { name: 'Calibri', sz: 10, color: { rgb: '555555' } };
+        if (C === 0) {
+          style.font = { name: 'Calibri', sz: 10, color: { rgb: '555555' } };
+          style.alignment = { horizontal: 'left', vertical: 'center' };
+        }
       }
 
-      // Section headers
-      if (val === 'QUOTATION SUMMARY' || val === 'VALUATION LEDGER') {
-        style.font = { name: 'Calibri', sz: 13, bold: true, color: { rgb: 'FFFFFF' } };
-        style.fill = { fgColor: { rgb: '1A1A2E' } };
-        style.alignment = { horizontal: 'left', vertical: 'center' };
+
+      // Section headers (row 6 and row 24)
+      if (val === 'SECTION 01: QUOTATION SUMMARY' || val === 'SECTION 02: VALUATION LEDGER') {
+        style.font = { name: 'Calibri', sz: 12, bold: true, color: { rgb: '000000' } };
+        style.alignment = { horizontal: 'center', vertical: 'center' };
       }
 
       // Table headers
       if ((val === 'Field' && R === 8) || (val === 'Value' && R === 8) ||
-          (val === 'Cost Head') || (val === 'Per Unit (₹)') || (val === 'Total (₹)')) {
+          (val === 'Cost Head' && R === 26) || (val === 'Per Unit (₹)' && R === 26) || (val === 'Total (₹)' && R === 26)) {
         style.font = { name: 'Calibri', sz: 11, bold: true, color: { rgb: 'FFFFFF' } };
         style.fill = { fgColor: { rgb: '3C3C3C' } };
         style.alignment = { horizontal: C > 0 ? 'right' : 'left', vertical: 'center' };
@@ -650,15 +804,16 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
       if (R === sRange.e.r && C > 0) {
         style.font = { name: 'Calibri', sz: 12, bold: true, color: { rgb: 'FFFFFF' } };
         style.fill = { fgColor: { rgb: '047857' } };
-        style.numFmt = '₹#,##0.00';
+        if (val !== '') style.numFmt = '₹#,##0.00';
         style.alignment = { horizontal: 'right', vertical: 'center' };
       }
 
       // Currency columns in ledger
-      if (typeof val === 'number' && R > 25) {
+      if (typeof val === 'number' && R > 26) {
         style.numFmt = '₹#,##0.00';
         style.alignment = { horizontal: 'right', vertical: 'center' };
       }
+
 
       summaryWS[addr].s = style;
     }
@@ -666,17 +821,28 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
 
   summaryWS['!cols'] = [{ wch: 30 }, { wch: 18 }, { wch: 18 }];
 
-  // Merge company name across columns
+  // Custom Row Heights for visual breathing room
+  const rowHeights = [];
+  for (let R = 0; R <= sRange.e.r; ++R) {
+    if (R === 0) rowHeights.push({ hpt: 28 }); // Company Name
+    else if (R >= 1 && R <= 4) rowHeights.push({ hpt: 16 }); // Address
+    else if (R === 5 || R === 7 || R === 23 || R === 25) rowHeights.push({ hpt: 8 }); // Spacers
+    else if (R === 6 || R === 24) rowHeights.push({ hpt: 24 }); // Section titles
+    else rowHeights.push({ hpt: 22 }); // Data rows
+  }
+  summaryWS['!rows'] = rowHeights;
+
+  // Merges for the summary sheet
   summaryWS['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 2 } },
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 2 } },
+    { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } },  // Company Name spans A-B (C is Doc Meta)
+    { s: { r: 1, c: 0 }, e: { r: 1, c: 2 } },  // Address lines span A-C
     { s: { r: 2, c: 0 }, e: { r: 2, c: 2 } },
     { s: { r: 3, c: 0 }, e: { r: 3, c: 2 } },
     { s: { r: 4, c: 0 }, e: { r: 4, c: 2 } },
-    { s: { r: 6, c: 0 }, e: { r: 6, c: 2 } },  // QUOTATION SUMMARY
+    { s: { r: 6, c: 0 }, e: { r: 6, c: 2 } },  // SECTION 01: QUOTATION SUMMARY
+    { s: { r: 24, c: 0 }, e: { r: 24, c: 2 } } // SECTION 02: VALUATION LEDGER
   ];
 
-  XLSX.utils.book_append_sheet(workbook, summaryWS, 'Summary');
 
   // ────────────────────────────────────────────────
   // SHEET 2: MATERIAL LIST
@@ -713,7 +879,13 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
   });
 
   const matWS = XLSX.utils.json_to_sheet(matRows);
-  applyProfessionalStyling(matWS, { numberCols: [4], currencyCols: [5, 6, 7, 8] });
+  const matHeaderOffset = addSheetHeader(matWS, {
+    docLabel: 'MATERIAL LIST',
+    qtnNo: quote.quotation_no,
+    sectionTitle: 'SECTION 01: RAW MATERIAL SPECIFICATIONS',
+    colCount: 9
+  });
+  applyProfessionalStyling(matWS, { numberCols: [4], currencyCols: [5, 6, 7, 8], dataStartRow: matHeaderOffset });
   matWS['!cols'] = [
     { wch: 6 }, { wch: 24 }, { wch: 18 }, { wch: 22 },
     { wch: 6 }, { wch: 13 }, { wch: 13 }, { wch: 13 }, { wch: 16 }
@@ -766,7 +938,13 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
   });
 
   const procWS = XLSX.utils.json_to_sheet(procRows);
-  applyProfessionalStyling(procWS, { numberCols: [3, 4], currencyCols: [6] });
+  const procHeaderOffset = addSheetHeader(procWS, {
+    docLabel: 'PROCESS SHEET',
+    qtnNo: quote.quotation_no,
+    sectionTitle: 'SECTION 02: MANUFACTURING PROCESS SHEET',
+    colCount: 7
+  });
+  applyProfessionalStyling(procWS, { numberCols: [3, 4], currencyCols: [6], dataStartRow: procHeaderOffset });
   procWS['!cols'] = [
     { wch: 6 }, { wch: 24 }, { wch: 24 },
     { wch: 12 }, { wch: 12 }, { wch: 14 }, { wch: 16 }
@@ -796,16 +974,25 @@ export const exportFullQuotationToExcel = (quote, fileName = 'Full_Quotation.xls
     'Sr.': '—', 'Item Description': 'No items specified', 'Unit': '—',
     'Qty': '—', 'Rate (₹)': '—', 'Total (₹)': '—'
   }]);
-  applyProfessionalStyling(bopWS, { numberCols: [3], currencyCols: [4, 5] });
+  const bopHeaderOffset = addSheetHeader(bopWS, {
+    docLabel: 'BOP LIST',
+    qtnNo: quote.quotation_no,
+    sectionTitle: 'SECTION 03: BOP PROCUREMENT LIST',
+    colCount: 6
+  });
+  applyProfessionalStyling(bopWS, { numberCols: [3], currencyCols: [4, 5], dataStartRow: bopHeaderOffset });
   bopWS['!cols'] = [
     { wch: 6 }, { wch: 36 }, { wch: 10 },
     { wch: 8 }, { wch: 16 }, { wch: 18 }
   ];
   XLSX.utils.book_append_sheet(workbook, bopWS, 'BOP List');
 
+  XLSX.utils.book_append_sheet(workbook, summaryWS, 'Summary');
+
   // ────────────────────────────────────────────────
   // WRITE FILE
   // ────────────────────────────────────────────────
+  if (returnWorkbook) return workbook;
   XLSX.writeFile(workbook, fileName);
 };
 

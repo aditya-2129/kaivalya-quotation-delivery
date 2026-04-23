@@ -57,10 +57,14 @@ export default function ApprovedQuotationsPage() {
       // Fetch everything matching filters (up to 5000 records)
       const allData = await approvedQuotationService.listApprovedQuotations(5000, 0, filters);
       
-      exportQuotationsToExcel(allData.documents, `Approved_Quotations_${new Date().toISOString().split('T')[0]}.xlsx`);
-      
       toast.dismiss();
-      toast.success("Registry exported successfully!");
+      setExcelPreview({
+        open: true,
+        title: "Approved Quotations (Registry)",
+        filename: `Approved_Quotations_${new Date().toISOString().split('T')[0]}.xlsx`,
+        optionId: 'quotations_excel',
+        data: allData.documents
+      });
     } catch (err) {
       toast.dismiss();
       toast.error("Export failed. Please try again.");
@@ -196,19 +200,27 @@ export default function ApprovedQuotationsPage() {
   };
 
   const handleExcelDownload = () => {
-    const { optionId, quotation, filename } = excelPreview;
-    if (!quotation || !optionId) return;
+    const { optionId, quotation, filename, data: exportData } = excelPreview;
+    if (!optionId) return;
 
     toast.loading('Generating Excel export...', { id: 'excel-gen' });
     
-    if (optionId === 'material_excel') {
-      exportMaterialListToExcel(quotation, filename);
-    } else if (optionId === 'process_excel') {
-      exportProcessSheetToExcel(quotation, filename);
-    } else if (optionId === 'bop_excel') {
-      exportBOPListToExcel(quotation, filename);
-    } else if (optionId === 'full_excel') {
-      exportFullQuotationToExcel(quotation, filename);
+    if (optionId === 'quotations_excel' && exportData) {
+      exportQuotationsToExcel(exportData, filename);
+    } else if (quotation) {
+      if (optionId === 'material_excel') {
+        exportMaterialListToExcel(quotation, filename);
+      } else if (optionId === 'process_excel') {
+        exportProcessSheetToExcel(quotation, filename);
+      } else if (optionId === 'bop_excel') {
+        exportBOPListToExcel(quotation, filename);
+      } else if (optionId === 'full_excel') {
+        exportFullQuotationToExcel(quotation, filename);
+      }
+    } else {
+      toast.dismiss('excel-gen');
+      toast.error('No data available for export.');
+      return;
     }
 
     toast.dismiss('excel-gen');
@@ -563,6 +575,9 @@ export default function ApprovedQuotationsPage() {
         onDownload={handleExcelDownload}
         title={excelPreview.title}
         filename={excelPreview.filename}
+        quotation={excelPreview.quotation}
+        optionId={excelPreview.optionId}
+        data={excelPreview.data}
       />
 
       {showDatePicker && (

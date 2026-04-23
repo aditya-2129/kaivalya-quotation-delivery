@@ -29,6 +29,7 @@ import { generateProcessSheetPDF } from '@/utils/generateProcessSheetPDF';
 import { generateBOPListPDF } from '@/utils/generateBOPListPDF';
 import { assetService } from '@/services/assets';
 import DownloadOptionsModal from '@/components/modals/DownloadOptionsModal';
+import PdfPreviewModal from '@/components/modals/PdfPreviewModal';
 import ExcelPreviewModal from '@/components/modals/ExcelPreviewModal';
 import { exportMaterialListToExcel, exportProcessSheetToExcel, exportBOPListToExcel, exportFullQuotationToExcel } from '@/utils/exportToExcel';
 import { toast } from 'react-hot-toast';
@@ -58,6 +59,7 @@ function EditQuotationContent() {
   const [lastQuotationRef, setLastQuotationRef] = useState('');
   const [savedQuotationData, setSavedQuotationData] = useState(null);
   const [downloadModal, setDownloadModal] = useState({ open: false, quotation: null });
+  const [pdfPreview, setPdfPreview] = useState({ open: false, doc: null, title: '', filename: '' });
   const [excelPreview, setExcelPreview] = useState({
     open: false,
     title: "",
@@ -519,11 +521,38 @@ function EditQuotationContent() {
         return;
       }
 
-      if (optionId === 'material') await generateMaterialListPDF(quotation);
-      else if (optionId === 'single') await generateSinglePagePDF(quotation, projectImageUrl);
-      else if (optionId === 'process') await generateProcessSheetPDF(quotation);
-      else if (optionId === 'bop') await generateBOPListPDF(quotation);
-      else await generateQuotationPDF(quotation, projectImageUrl);
+      let doc;
+      let title = "PDF Preview";
+      let filename = "document.pdf";
+
+      if (optionId === 'material') {
+        doc = await generateMaterialListPDF(quotation, { save: false });
+        title = "Material List";
+        filename = `MaterialList_${quotation.quotation_no}.pdf`;
+      } else if (optionId === 'single') {
+        doc = await generateSinglePagePDF(quotation, projectImageUrl, { save: false });
+        title = "Single Page Quotation";
+        const sanitizedClient = (quotation.supplier_name || 'Client').replace(/[/\\?%*:|"<>]/g, '');
+        const sanitizedQtn = (quotation.quotation_no || 'QTN').replace(/[/\\?%*:|"<>]/g, '');
+        const qtnDate = quotation.inquiry_date 
+          ? new Date(quotation.inquiry_date).toLocaleDateString('en-GB').replace(/\//g, '-') 
+          : new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
+        filename = `${sanitizedClient} ${sanitizedQtn} ${qtnDate}.pdf`.trim();
+      } else if (optionId === 'process') {
+        doc = await generateProcessSheetPDF(quotation, { save: false });
+        title = "Manufacturing Process Sheet";
+        filename = `ProcessSheet_${quotation.quotation_no}.pdf`;
+      } else if (optionId === 'bop') {
+        doc = await generateBOPListPDF(quotation, { save: false });
+        title = "BOP Procurement List";
+        filename = `BOP_List_${quotation.quotation_no}.pdf`;
+      } else {
+        doc = await generateQuotationPDF(quotation, projectImageUrl, { save: false });
+        title = "Full Technical Quotation";
+        filename = `Full_Quotation_${quotation.quotation_no}.pdf`;
+      }
+
+      setPdfPreview({ open: true, doc, title, filename });
     } catch (err) {
       toast.error("Export encountered an error. Please try again.");
     }
@@ -991,12 +1020,23 @@ function EditQuotationContent() {
          quotationNo={downloadModal.quotation?.quotation_no}
       />
 
+      <PdfPreviewModal
+        isOpen={pdfPreview.open}
+        onClose={() => setPdfPreview({ ...pdfPreview, open: false })}
+        pdfDoc={pdfPreview.doc}
+        title={pdfPreview.title}
+        filename={pdfPreview.filename}
+      />
+
       <ExcelPreviewModal
         isOpen={excelPreview.open}
         onClose={() => setExcelPreview({ ...excelPreview, open: false })}
         onDownload={handleExcelDownload}
         title={excelPreview.title}
         filename={excelPreview.filename}
+        quotation={excelPreview.quotation}
+        optionId={excelPreview.optionId}
+        data={excelPreview.data}
       />
     </DashboardLayout>
   );

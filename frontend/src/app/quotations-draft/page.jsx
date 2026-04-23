@@ -378,6 +378,9 @@ export default function QuotationsPage() {
         onDownload={handleExcelDownload}
         title={excelPreview.title}
         filename={excelPreview.filename}
+        quotation={excelPreview.quotation}
+        optionId={excelPreview.optionId}
+        data={excelPreview.data}
       />
 
       {showDatePicker && (

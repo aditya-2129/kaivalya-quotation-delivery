@@ -138,10 +138,14 @@ export default function ConfirmedOrdersPage() {
         return;
       }
 
-      const fileName = `Confirmed_Orders_${format(new Date(), "yyyy-MM-dd")}.xlsx`;
-      exportPurchaseOrdersToExcel(exportData.documents, fileName);
-
-      toast.success("Orders exported successfully", { id: "export-orders" });
+      toast.dismiss("export-orders");
+      setExcelPreview({
+        open: true,
+        title: "Confirmed Orders (Registry)",
+        filename: `Confirmed_Orders_${format(new Date(), "yyyy-MM-dd")}.xlsx`,
+        optionId: 'po_excel',
+        data: exportData.documents
+      });
     } catch (error) {
       console.error("Export error:", error);
       toast.error("Failed to export orders", { id: "export-orders" });
@@ -267,19 +271,27 @@ export default function ConfirmedOrdersPage() {
   };
 
   const handleExcelDownload = () => {
-    const { optionId, quotation, filename } = excelPreview;
-    if (!quotation || !optionId) return;
+    const { optionId, quotation, filename, data: exportData } = excelPreview;
+    if (!optionId) return;
 
     toast.loading('Generating Excel export...', { id: 'excel-gen' });
     
-    if (optionId === 'material_excel') {
-      exportMaterialListToExcel(quotation, filename);
-    } else if (optionId === 'process_excel') {
-      exportProcessSheetToExcel(quotation, filename);
-    } else if (optionId === 'bop_excel') {
-      exportBOPListToExcel(quotation, filename);
-    } else if (optionId === 'full_excel') {
-      exportFullQuotationToExcel(quotation, filename);
+    if (optionId === 'po_excel' && exportData) {
+      exportPurchaseOrdersToExcel(exportData, filename);
+    } else if (quotation) {
+      if (optionId === 'material_excel') {
+        exportMaterialListToExcel(quotation, filename);
+      } else if (optionId === 'process_excel') {
+        exportProcessSheetToExcel(quotation, filename);
+      } else if (optionId === 'bop_excel') {
+        exportBOPListToExcel(quotation, filename);
+      } else if (optionId === 'full_excel') {
+        exportFullQuotationToExcel(quotation, filename);
+      }
+    } else {
+      toast.dismiss('excel-gen');
+      toast.error('No data available for export.');
+      return;
     }
 
     toast.dismiss('excel-gen');
@@ -781,6 +793,9 @@ export default function ConfirmedOrdersPage() {
         onDownload={handleExcelDownload}
         title={excelPreview.title}
         filename={excelPreview.filename}
+        quotation={excelPreview.quotation}
+        optionId={excelPreview.optionId}
+        data={excelPreview.data}
       />
     </DashboardLayout>
   );
