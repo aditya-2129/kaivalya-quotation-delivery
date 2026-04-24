@@ -164,7 +164,7 @@ function EditQuotationContent() {
 
         const sanitizedItems = (parsedItems.length > 0 ? parsedItems : [{
            id: Date.now(),
-           part_name: 'Part 01',
+           part_name: '',
            qty: 1,
            processes: [],
            treatments: [],
@@ -276,7 +276,7 @@ function EditQuotationContent() {
 
   const activeQuote = formData.items[selectedItemIndex] || formData.items[0] || {
     id: Date.now(),
-    part_name: 'Part 01',
+    part_name: '',
     qty: 1,
     processes: [],
     design_files: [],
@@ -309,6 +309,11 @@ function EditQuotationContent() {
     if (!formData.revision_no) missingFields.push("Quotation Version");
     if (!formData.inquiry_date) missingFields.push("Date Received");
     if (!formData.delivery_date) missingFields.push("Expected Delivery Date");
+
+    if (formData.inquiry_date && formData.delivery_date && formData.delivery_date < formData.inquiry_date) {
+       missingFields.push("Delivery Date cannot be before Receipt Date");
+    }
+
     if (!formData.quantity || formData.quantity <= 0) missingFields.push("Quantity to Make (Total)");
 
     if (formData.items.length === 0) {

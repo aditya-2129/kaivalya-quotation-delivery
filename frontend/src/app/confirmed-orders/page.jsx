@@ -304,8 +304,8 @@ export default function ConfirmedOrdersPage() {
   const orders = data?.documents || [];
   const total = data?.total || 0;
 
-  const getDueBadge = (deliveryDate) => {
-    if (!deliveryDate) return null;
+  const getDueBadge = (deliveryDate, status) => {
+    if (!deliveryDate || status === "Completed" || status === "Shipped" || status === "Cancelled") return null;
     const daysLeft = Math.ceil(
       (new Date(deliveryDate) - new Date()) / 86400000,
     );
@@ -615,7 +615,7 @@ export default function ConfirmedOrdersPage() {
                               )}
                             </span>
                             {(() => {
-                              const b = getDueBadge(order.delivery_date);
+                              const b = getDueBadge(order.delivery_date, order.status);
                               return b ? (
                                 <span
                                   className={`text-[9px] uppercase tracking-widest ${b.cls}`}

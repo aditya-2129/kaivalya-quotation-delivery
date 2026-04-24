@@ -25,6 +25,8 @@ const ScopeAndIdentity = ({
 }) => {
   const { isUploading, uploadFile, uploadFiles, getPreviewUrl } = useAssets();
   const [isUploadingImg, setIsUploadingImg] = useState(false);
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [isUploadingCad, setIsUploadingCad] = useState(false);
   const [userSearch, setUserSearch] = useState(formData.quoting_engineer || "");
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
@@ -232,7 +234,17 @@ const ScopeAndIdentity = ({
                className="w-full h-8.5 px-4 rounded-lg bg-zinc-50 border border-zinc-200 focus:ring-2 focus:ring-zinc-950 focus:bg-white outline-none transition-all font-semibold text-black shadow-sm"
                style={{ fontSize: THEME.FONT_SIZE.SMALL }}
                value={formData.inquiry_date || ""}
-               onChange={(e) => setFormData(prev => ({ ...prev, inquiry_date: e.target.value }))}
+               onChange={(e) => {
+                  const newInquiryDate = e.target.value;
+                  setFormData(prev => {
+                     const updates = { inquiry_date: newInquiryDate };
+                     // If delivery date exists and is now before the new inquiry date, clear it
+                     if (prev.delivery_date && prev.delivery_date < newInquiryDate) {
+                        updates.delivery_date = "";
+                     }
+                     return { ...prev, ...updates };
+                  });
+               }}
              />
           </div>
           <div>
@@ -246,7 +258,14 @@ const ScopeAndIdentity = ({
                className="w-full h-8.5 px-4 rounded-lg bg-zinc-50 border border-zinc-200 focus:ring-2 focus:ring-zinc-950 focus:bg-white outline-none transition-all font-semibold text-black shadow-sm"
                style={{ fontSize: THEME.FONT_SIZE.SMALL }}
                value={formData.delivery_date || ""}
-               onChange={(e) => setFormData(prev => ({ ...prev, delivery_date: e.target.value }))}
+               min={formData.inquiry_date}
+               onChange={(e) => {
+                  const val = e.target.value;
+                  if (formData.inquiry_date && val < formData.inquiry_date) {
+                     return; // Prevent setting date before inquiry date
+                  }
+                  setFormData(prev => ({ ...prev, delivery_date: val }));
+               }}
              />
           </div>
 
@@ -497,15 +516,21 @@ const ScopeAndIdentity = ({
                     Inquiry PDFs
                  </label>
                  <div className="flex flex-wrap gap-2.5">
-                    <label className="relative group/file h-20 w-32 rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 flex flex-col items-center justify-center transition-all hover:bg-white hover:border-brand-primary/50 overflow-hidden shadow-sm-inset cursor-pointer px-4 text-center shrink-0">
-                       <input 
-                         type="file" 
+                    <label className={`relative group/file h-20 w-32 rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 flex flex-col items-center justify-center transition-all hover:bg-white hover:border-brand-primary/50 overflow-hidden shadow-sm-inset cursor-pointer px-4 text-center shrink-0 ${isUploadingPdf ? 'pointer-events-none' : ''}`}>
+                       {isUploadingPdf && (
+                          <div className="absolute inset-0 bg-white/90 z-10 flex flex-col items-center justify-center rounded-xl">
+                             <div className="h-4 w-4 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
+                          </div>
+                       )}
+                       <input
+                         type="file"
                          multiple
-                         className="hidden" 
+                         className="hidden"
                          accept=".pdf"
                          onChange={async (e) => {
                             const files = Array.from(e.target.files || []);
                             if (files.length === 0) return;
+                            setIsUploadingPdf(true);
                             try {
                                const responses = await uploadFiles(files);
                                setFormData(prev => ({
@@ -515,6 +540,7 @@ const ScopeAndIdentity = ({
                             } catch (err) {
                                alert("PDF upload failed: " + err.message);
                             } finally {
+                               setIsUploadingPdf(false);
                                if (e.target) e.target.value = null;
                             }
                          }}
@@ -562,15 +588,21 @@ const ScopeAndIdentity = ({
                     STP / CAD Models
                  </label>
                  <div className="flex flex-wrap gap-2.5">
-                    <label className="relative group/file h-20 w-32 rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 flex flex-col items-center justify-center transition-all hover:bg-white hover:border-brand-primary/50 overflow-hidden shadow-sm-inset cursor-pointer px-4 text-center shrink-0">
-                       <input 
-                         type="file" 
+                    <label className={`relative group/file h-20 w-32 rounded-xl border-2 border-dashed border-zinc-200 bg-zinc-50/50 flex flex-col items-center justify-center transition-all hover:bg-white hover:border-brand-primary/50 overflow-hidden shadow-sm-inset cursor-pointer px-4 text-center shrink-0 ${isUploadingCad ? 'pointer-events-none' : ''}`}>
+                       {isUploadingCad && (
+                          <div className="absolute inset-0 bg-white/90 z-10 flex flex-col items-center justify-center rounded-xl">
+                             <div className="h-4 w-4 border-2 border-brand-primary border-t-transparent rounded-full animate-spin" />
+                          </div>
+                       )}
+                       <input
+                         type="file"
                          multiple
-                         className="hidden" 
+                         className="hidden"
                          accept=".stp,.step,.dwg,.dxf,.zip"
                          onChange={async (e) => {
                             const files = Array.from(e.target.files || []);
                             if (files.length === 0) return;
+                            setIsUploadingCad(true);
                             try {
                                const responses = await uploadFiles(files);
                                setFormData(prev => ({
@@ -580,6 +612,7 @@ const ScopeAndIdentity = ({
                             } catch (err) {
                                alert("CAD upload failed: " + err.message);
                             } finally {
+                               setIsUploadingCad(false);
                                if (e.target) e.target.value = null;
                             }
                          }}

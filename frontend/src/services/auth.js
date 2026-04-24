@@ -125,6 +125,36 @@ export const authService = {
             console.error("Auth Service Error [resetUserPassword]:", error);
             throw error;
         }
+    },
+
+    /**
+     * Delete an Appwrite auth account via server-side API (admin use only).
+     */
+    async deleteAuthUser(userId) {
+        try {
+            const { jwt } = await account.createJWT();
+            const response = await fetch('/api/admin/delete-user', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Appwrite-JWT': jwt,
+                },
+                body: JSON.stringify({ userId })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                const error = new Error(data.error || 'Failed to delete auth account.');
+                error.code = response.status;
+                throw error;
+            }
+
+            return data;
+        } catch (error) {
+            console.error("Auth Service Error [deleteAuthUser]:", error);
+            throw error;
+        }
     }
 };
 

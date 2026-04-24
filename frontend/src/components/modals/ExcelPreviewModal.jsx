@@ -13,6 +13,7 @@ import {
   exportQuotationsToExcel,
   exportPurchaseOrdersToExcel
 } from '@/utils/exportToExcel';
+import { assetService } from '@/services/assets';
 
 const ExcelPreviewModal = ({ 
   isOpen, 
@@ -30,6 +31,11 @@ const ExcelPreviewModal = ({
   const [error, setError] = useState(null);
   const containerRef = useRef(null);
   const spreadsheetRef = useRef(null);
+  const [selectedImageId, setSelectedImageId] = useState(null);
+  const [imageMarkers, setImageMarkers] = useState([]);
+  const [activeSheetIndex, setActiveSheetIndex] = useState(0);
+  const [activeSheetName, setActiveSheetName] = useState("");
+  const [scrollPos, setScrollPos] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (isOpen && containerRef.current) {
@@ -125,10 +131,73 @@ const ExcelPreviewModal = ({
             },
           };
 
+          // Identify all cells with images across all sheets
+          const markers = {};
+          xData.forEach(sheetData => {
+            const normalizedName = (sheetData.name || "").toLowerCase().trim();
+            const sheetMarkers = [];
+            Object.keys(sheetData.rows || {}).forEach(ri => {
+              const row = sheetData.rows[ri];
+              if (row && row.cells) {
+                Object.keys(row.cells).forEach(ci => {
+                  const cell = row.cells[ci];
+                  // Robust detection: check property or raw text
+                  const imgId = cell?.imageId || (cell?.text?.startsWith('[IMG:') ? cell.text.substring(5, cell.text.length - 1) : null);
+                  if (imgId) {
+                    sheetMarkers.push({ 
+                      ri: parseInt(ri), 
+                      ci: parseInt(ci), 
+                      imageId: imgId 
+                    });
+                  }
+                });
+              }
+            });
+            markers[normalizedName] = sheetMarkers;
+          });
+          
+          setImageMarkers(markers);
+          const initialName = (xData[0]?.name || "").toLowerCase().trim();
+          setActiveSheetName(initialName);
+
           const s = new Spreadsheet(containerRef.current, options)
             .loadData(xData);
           
           spreadsheetRef.current = s;
+
+          s.on('cell-selected', (cell, ri, ci) => {
+            if (cell && (cell.imageId || cell.text?.startsWith('[IMG:'))) {
+              const id = cell.imageId || cell.text.substring(5, cell.text.length - 1);
+              setSelectedImageId(id);
+            } else {
+              setSelectedImageId(null);
+            }
+          });
+
+          s.on('change-sheet', (name) => {
+            const normalized = (name || "").toLowerCase().trim();
+            setActiveSheetName(normalized);
+            setScrollPos({ x: 0, y: 0 });
+          });
+
+          // Sync scroll position for overlays
+          // Note: x-spreadsheet events for scroll are sometimes internal, we can also use a timer or a proxy
+          let rafCancelled = false;
+          const syncScroll = () => {
+            if (rafCancelled) return;
+            if (s.sheet && s.sheet.data && s.sheet.data.scroll) {
+              const scroll = s.sheet.data.scroll;
+              setScrollPos({
+                x: scroll.x ?? scroll.left ?? 0,
+                y: scroll.y ?? scroll.top ?? 0
+              });
+            }
+            requestAnimationFrame(syncScroll);
+          };
+          requestAnimationFrame(syncScroll);
+
+          spreadsheetRef.current = s;
+          spreadsheetRef.current.__cancelScroll = () => { rafCancelled = true; };
 
           // ─── Auto-Resize Fix ───
           // x-spreadsheet only listens to window resize by default.
@@ -155,6 +224,9 @@ const ExcelPreviewModal = ({
       if (spreadsheetRef.current) {
         if (spreadsheetRef.current.__resizeObserver) {
           spreadsheetRef.current.__resizeObserver.disconnect();
+        }
+        if (spreadsheetRef.current.__cancelScroll) {
+          spreadsheetRef.current.__cancelScroll();
         }
         spreadsheetRef.current = null;
       }
@@ -237,11 +309,111 @@ const ExcelPreviewModal = ({
               </button>
             </div>
           ) : (
-            <div 
-              ref={containerRef} 
-              className="w-full h-full x-spreadsheet-container overflow-hidden" 
-              style={{ background: '#ffffff' }}
-            />
+            <div className="flex-1 flex overflow-hidden relative">
+              <div 
+                ref={containerRef} 
+                className="flex-1 x-spreadsheet-container overflow-hidden" 
+                style={{ background: '#ffffff' }}
+              />
+
+              {/* Real Image Overlays for Canvas Grid */}
+              <div className="absolute inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 50 }}>
+                {spreadsheetRef.current && imageMarkers[activeSheetName]?.map((m, idx) => {
+                  const s = spreadsheetRef.current;
+                  if (!s.sheet || !s.sheet.data) return null;
+                  
+                  // Manual calculation of cell rect to avoid version-specific method errors
+                  const d = s.sheet.data;
+                  const rect = {
+                    top: d.rows.sumHeight(0, m.ri),
+                    left: d.cols.sumWidth(0, m.ci),
+                    width: d.cols.getWidth(m.ci),
+                    height: d.rows.getHeight(m.ri)
+                  };
+                  
+                  const indexWidth = d.cols.indexWidth || 60;
+                  const indexHeight = d.rows.indexHeight || 25; 
+
+                  // Calculate position relative to the visible viewport
+                  const top = rect.top + indexHeight - scrollPos.y;
+                  const left = rect.left + indexWidth - scrollPos.x;
+
+                  // Only render if roughly within viewport (with margin)
+                  const viewWidth = containerRef.current?.offsetWidth || 1000;
+                  const viewHeight = containerRef.current?.offsetHeight || 600;
+
+                  if (top + rect.height < indexHeight || top > viewHeight || 
+                      left + rect.width < indexWidth || left > viewWidth) {
+                    return null;
+                  }
+
+                  return (
+                    <div 
+                      key={`${activeSheetName}-${idx}`}
+                      className="absolute flex items-center justify-center p-1 bg-white border border-zinc-100/50"
+                      style={{
+                        top: `${top + 1}px`, // subtle offset for border alignment
+                        left: `${left + 1}px`,
+                        width: `${rect.width - 2}px`,
+                        height: `${rect.height - 2}px`,
+                      }}
+                    >
+                      <img 
+                        src={assetService.getFileView(m.imageId)} 
+                        alt="part"
+                        className="max-w-full max-h-full object-contain rounded-sm"
+                        style={{ pointerEvents: 'auto' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedImageId(m.imageId);
+                        }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Image Preview Sidebar */}
+              {selectedImageId && (
+                <div className="w-80 border-l border-zinc-100 bg-white flex flex-col animate-in slide-in-from-right duration-300 relative z-[10]">
+                  <div className="p-4 border-b border-zinc-50 flex items-center justify-between">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Part Preview</span>
+                    <button onClick={() => setSelectedImageId(null)} className="text-zinc-400 hover:text-zinc-600">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div className="flex-1 p-6 flex flex-col items-center justify-center bg-zinc-50/30">
+                    <div className="w-full aspect-square rounded-3xl overflow-hidden bg-white shadow-xl border border-zinc-100 flex items-center justify-center p-2 relative group">
+                      <img 
+                        src={assetService.getFileView(selectedImageId)} 
+                        alt="Part Preview"
+                        className="max-w-full max-h-full object-contain"
+                        onError={(e) => {
+                          e.target.src = 'https://placehold.co/400?text=Preview+Unavailable';
+                        }}
+                      />
+                    </div>
+                    <div className="mt-8 text-center px-4">
+                      <h4 className="text-sm font-bold text-zinc-900 uppercase tracking-tight">Embedded Image</h4>
+                      <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest mt-2">
+                        ID: {selectedImageId}
+                      </p>
+                      <p className="text-[11px] text-zinc-500 mt-6 leading-relaxed">
+                        This image will be automatically embedded in the exported .xlsx file at full resolution.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="p-6">
+                    <button 
+                      onClick={() => window.open(assetService.getFileView(selectedImageId), '_blank')}
+                      className="w-full h-12 rounded-2xl bg-zinc-900 text-white font-black text-[10px] uppercase tracking-widest hover:bg-zinc-800 transition-all shadow-lg shadow-zinc-200"
+                    >
+                      View Full Size
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
         </div>
 

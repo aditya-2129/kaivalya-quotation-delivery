@@ -32,12 +32,15 @@ export const purchaseOrderService = {
             }
 
             if (filters.dateRange && filters.dateRange.start && filters.dateRange.end) {
-                const startDate = new Date(filters.dateRange.start);
-                startDate.setHours(0, 0, 0, 0);
-                const endDate = new Date(filters.dateRange.end);
-                endDate.setHours(23, 59, 59, 999);
-                queries.push(Query.greaterThanEqual('$createdAt', startDate.toISOString()));
-                queries.push(Query.lessThanEqual('$createdAt', endDate.toISOString()));
+                const start = new Date(filters.dateRange.start);
+                const end = new Date(filters.dateRange.end);
+                
+                // Format to YYYY-MM-DD to match po_date storage format
+                const startStr = start.toISOString().split('T')[0];
+                const endStr = end.toISOString().split('T')[0];
+                
+                queries.push(Query.greaterThanEqual('po_date', startStr));
+                queries.push(Query.lessThanEqual('po_date', endStr));
             }
 
             const response = await databases.listDocuments(
@@ -57,35 +60,41 @@ export const purchaseOrderService = {
      */
     async getOrderMetrics(filters = {}) {
         try {
-            const selectFields = Query.select(['total_amount', 'actual_valuation', 'status', '$createdAt']);
+            const selectFields = Query.select(['total_amount', 'actual_valuation', 'status', 'po_date']);
             const baseLimit = Query.limit(5000);
 
             const now = new Date();
-            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
 
             const activeStatuses = ['Received', 'In Production', 'Shipped'];
 
             const periodQueries = [baseLimit, selectFields];
             if (filters.dateRange?.start && filters.dateRange?.end) {
-                const startDate = new Date(filters.dateRange.start);
-                startDate.setHours(0, 0, 0, 0);
-                const endDate = new Date(filters.dateRange.end);
-                endDate.setHours(23, 59, 59, 999);
-                periodQueries.push(Query.greaterThanEqual('$createdAt', startDate.toISOString()));
-                periodQueries.push(Query.lessThanEqual('$createdAt', endDate.toISOString()));
+                const startStr = new Date(filters.dateRange.start).toISOString().split('T')[0];
+                const endStr = new Date(filters.dateRange.end).toISOString().split('T')[0];
+                periodQueries.push(Query.greaterThanEqual('po_date', startStr));
+                periodQueries.push(Query.lessThanEqual('po_date', endStr));
             }
 
             const [allRes, currentMonthRes, activeRes, periodRes] = await Promise.all([
-                databases.listDocuments(DATABASE_ID, COLLECTIONS.PURCHASE_ORDERS, [baseLimit, Query.select(['$id'])]),
+                databases.listDocuments(DATABASE_ID, COLLECTIONS.PURCHASE_ORDERS, [
+                    baseLimit, 
+                    Query.select(['$id']),
+                    Query.notEqual('status', 'Cancelled')
+                ]),
                 databases.listDocuments(DATABASE_ID, COLLECTIONS.PURCHASE_ORDERS, [
                     baseLimit, selectFields,
-                    Query.greaterThanEqual('$createdAt', monthStart),
+                    Query.greaterThanEqual('po_date', monthStart),
+                    Query.notEqual('status', 'Cancelled')
                 ]),
                 databases.listDocuments(DATABASE_ID, COLLECTIONS.PURCHASE_ORDERS, [
                     baseLimit, selectFields,
                     Query.or(activeStatuses.map(s => Query.equal('status', s))),
                 ]),
-                databases.listDocuments(DATABASE_ID, COLLECTIONS.PURCHASE_ORDERS, periodQueries),
+                databases.listDocuments(DATABASE_ID, COLLECTIONS.PURCHASE_ORDERS, [
+                    ...periodQueries,
+                    Query.notEqual('status', 'Cancelled')
+                ]),
             ]);
 
             const sumValue = (docs) => docs.reduce((sum, doc) => sum + (parseFloat(doc.actual_valuation || doc.total_amount) || 0), 0);

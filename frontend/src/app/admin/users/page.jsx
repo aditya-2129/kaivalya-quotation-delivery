@@ -45,8 +45,11 @@ export default function UserManagementPage() {
   const commitDelete = async () => {
     if (!deleteConfirm.row) return;
     try {
-      await deleteUser.mutateAsync(deleteConfirm.row.$id);
-      toast.success('User profile removed.');
+      await deleteUser.mutateAsync({ 
+        documentId: deleteConfirm.row.$id, 
+        authId: deleteConfirm.row.auth_id 
+      });
+      toast.success('User and access revoked.');
       setDeleteConfirm({ open: false, row: null });
     } catch (err) {
       toast.error(err.message || 'Deletion failed.');

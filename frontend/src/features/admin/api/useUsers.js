@@ -55,7 +55,14 @@ export const useUpdateUser = () => {
 export const useDeleteUser = () => {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id) => userService.deleteUser(id),
+    mutationFn: async ({ documentId, authId }) => {
+      // 1. Delete Auth Account if authId exists
+      if (authId) {
+        await authService.deleteAuthUser(authId);
+      }
+      // 2. Delete User Profile
+      return await userService.deleteUser(documentId);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['users'] });
     },

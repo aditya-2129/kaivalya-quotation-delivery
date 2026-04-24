@@ -54,16 +54,30 @@ export async function generateQuotationPDF(quote, projectImageUrl = null, { save
 
   const rawMaterials = items.filter(item => item.material).map((item, index) => {
     const dims = item.dimensions || {};
+    const allows = item.allowances || {};
+    const p = (v) => parseFloat(v) || 0;
+    const r2 = (v) => Math.round(v * 100) / 100;
+
     let dimStr = '—';
     if (item.shape === 'rect') dimStr = `${dims.l}x${dims.w}x${dims.t}`;
     else if (item.shape === 'round') dimStr = `Dia ${dims.dia} x ${dims.l}`;
     else if (item.shape === 'hex') dimStr = `AF ${dims.af} x ${dims.l}`;
+
+    let rawDimStr = '—';
+    if (item.shape === 'rect') {
+      rawDimStr = `${r2(p(dims.l) + p(allows.l))}x${r2(p(dims.w) + p(allows.w))}x${r2(p(dims.t) + p(allows.t))}`;
+    } else if (item.shape === 'round') {
+      rawDimStr = `Dia ${r2(p(dims.dia) + p(allows.dia))} x ${r2(p(dims.l) + p(allows.l))}`;
+    } else if (item.shape === 'hex') {
+      rawDimStr = `AF ${r2(p(dims.af) + p(allows.af))} x ${r2(p(dims.l) + p(allows.l))}`;
+    }
 
     return [
       index + 1,
       item.part_name || '-',
       item.material.grade || '-',
       dimStr,
+      rawDimStr,
       item.qty || 1,
       `${parseFloat(item.material_weight || 0).toFixed(2)} kg`,
       `${(parseFloat(item.material_weight || 0) * (item.qty || 1)).toFixed(2)} kg`,
@@ -75,18 +89,18 @@ export async function generateQuotationPDF(quote, projectImageUrl = null, { save
   autoTable(doc, {
     startY: cY,
     margin: { left: margin, right: margin, top: 25 }, // top margin ensures overflow pages don't overlap header
-    head: [['Sr.', 'Part Name', 'Material', 'Dimensions (mm)', 'Qty', 'Unit Wt', 'Total Wt', 'Rate', 'Amount']],
+    head: [['Sr.', 'Part Name', 'Material', 'Dimensions (mm)', 'Raw Dim', 'Qty', 'Unit Wt', 'Total Wt', 'Rate', 'Amount']],
     body: rawMaterials,
     theme: 'grid',
-    styles: { fontSize: 8, cellPadding: 2, textColor: [0, 0, 0], lineColor: [200, 200, 200], lineWidth: 0.1 },
+    styles: { fontSize: 7, cellPadding: 1.5, textColor: [0, 0, 0], lineColor: [200, 200, 200], lineWidth: 0.1 },
     headStyles: { fillColor: [60, 60, 60], textColor: [255, 255, 255], fontStyle: 'bold' },
     columnStyles: { 
-      0: { cellWidth: 8 }, 
-      4: { halign: 'center', cellWidth: 10 }, 
-      5: { halign: 'right' }, 
-      6: { halign: 'right' },
+      0: { cellWidth: 7 }, 
+      5: { halign: 'center', cellWidth: 8 }, 
+      6: { halign: 'right' }, 
       7: { halign: 'right' },
-      8: { halign: 'right', fontStyle: 'bold' }
+      8: { halign: 'right' },
+      9: { halign: 'right', fontStyle: 'bold' }
     }
   });
 

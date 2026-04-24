@@ -41,7 +41,7 @@ function mapSheet(ws, XLSX) {
   if (ws['!cols']) {
     ws['!cols'].forEach((col, i) => {
       if (col.wpx) result.cols[i] = { width: col.wpx };
-      else if (col.wch) result.cols[i] = { width: col.wch * 8 };
+      else if (col.wch) result.cols[i] = { width: col.wch * 9 }; // Improved multiplier for better matching
     });
   }
 
@@ -71,6 +71,12 @@ function mapSheet(ws, XLSX) {
       }
 
       const cellData = { text: displayText };
+
+      // Detect image placeholders and tag them for the UI
+      if (displayText.startsWith('[IMG:') && displayText.endsWith(']')) {
+        cellData.imageId = displayText.substring(5, displayText.length - 1);
+        cellData.text = ''; // Clear text so it doesn't show behind the image overlay
+      }
 
       // ── Style Mapping ──
       if (cell.s) {
