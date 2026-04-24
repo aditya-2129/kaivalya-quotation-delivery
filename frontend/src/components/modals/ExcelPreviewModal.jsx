@@ -182,20 +182,22 @@ const ExcelPreviewModal = ({
 
           // Sync scroll position for overlays
           // Note: x-spreadsheet events for scroll are sometimes internal, we can also use a timer or a proxy
+          let rafCancelled = false;
           const syncScroll = () => {
+            if (rafCancelled) return;
             if (s.sheet && s.sheet.data && s.sheet.data.scroll) {
               const scroll = s.sheet.data.scroll;
-              setScrollPos({ 
-                x: scroll.x ?? scroll.left ?? 0, 
-                y: scroll.y ?? scroll.top ?? 0 
+              setScrollPos({
+                x: scroll.x ?? scroll.left ?? 0,
+                y: scroll.y ?? scroll.top ?? 0
               });
             }
             requestAnimationFrame(syncScroll);
           };
-          const scrollRaf = requestAnimationFrame(syncScroll);
+          requestAnimationFrame(syncScroll);
 
           spreadsheetRef.current = s;
-          spreadsheetRef.current.__scrollRaf = scrollRaf;
+          spreadsheetRef.current.__cancelScroll = () => { rafCancelled = true; };
 
           // ─── Auto-Resize Fix ───
           // x-spreadsheet only listens to window resize by default.
@@ -223,8 +225,8 @@ const ExcelPreviewModal = ({
         if (spreadsheetRef.current.__resizeObserver) {
           spreadsheetRef.current.__resizeObserver.disconnect();
         }
-        if (spreadsheetRef.current.__scrollRaf) {
-          cancelAnimationFrame(spreadsheetRef.current.__scrollRaf);
+        if (spreadsheetRef.current.__cancelScroll) {
+          spreadsheetRef.current.__cancelScroll();
         }
         spreadsheetRef.current = null;
       }

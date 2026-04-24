@@ -132,9 +132,13 @@ export const authService = {
      */
     async deleteAuthUser(userId) {
         try {
+            const { jwt } = await account.createJWT();
             const response = await fetch('/api/admin/delete-user', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Appwrite-JWT': jwt,
+                },
                 body: JSON.stringify({ userId })
             });
 

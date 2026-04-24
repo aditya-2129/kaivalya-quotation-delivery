@@ -1,5 +1,19 @@
 import { NextResponse } from 'next/server';
 
+function isAllowedImageUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const trusted = new URL(process.env.NEXT_PUBLIC_APPWRITE_ENDPOINT);
+    return (
+      parsed.protocol === 'https:' &&
+      parsed.hostname === trusted.hostname &&
+      parsed.pathname.startsWith('/storage/')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
@@ -9,7 +23,10 @@ export async function GET(request) {
       return NextResponse.json({ error: 'URL parameter is required' }, { status: 400 });
     }
 
-    // Fetch the image from the provided URL
+    if (!isAllowedImageUrl(url)) {
+      return NextResponse.json({ error: 'URL not allowed.' }, { status: 400 });
+    }
+
     const response = await fetch(url);
     
     if (!response.ok) {
